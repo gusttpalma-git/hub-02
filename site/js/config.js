@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════
 window.PN_CONFIG = {
   // Endereço da API (Supabase Edge Function "pn-api").
-  API_URL: "https://SEU-PROJETO.supabase.co/functions/v1/pn-api",
+  API_URL: "https://pwaipteerztxyzdyhvit.supabase.co/functions/v1/pn-api",
 
   // Nome da loja, mostrado no topo e no rodapé.
   MARCA: "Patinha de Natal",
