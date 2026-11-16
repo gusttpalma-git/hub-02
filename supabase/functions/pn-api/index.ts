@@ -10,6 +10,7 @@
 // pn_settings, preenchida pelo painel /admin.html. A variável de ambiente ganha.
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { flattenColors } from "./flatten.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -32,15 +33,17 @@ const CORS = {
 
 // O prompt fixa a composição: não importa a pose, o fundo ou a raça na foto,
 // o pet sai sempre de frente, dentro do aro, com as patinhas apoiadas embaixo.
-const ART_PROMPT = `Turn the pet in the photo into a minimalist flat sticker-style illustration for a round Christmas-tree ornament.
+const ART_PROMPT = `Turn the pet in the photo into a minimalist flat sticker-style illustration for a round Christmas-tree ornament that will be 3D printed in FOUR filament colours.
 
-COMPOSITION (always identical, no matter how the photo looks): pure white square canvas. Centered on it, one large perfect circle drawn with a thick black ring and filled with a very light solid blue-grey (#E6ECF2). The circle fills about 80% of the canvas width. The pet is shown from the chest up, facing the viewer, head centered and upright, looking straight at the camera, peeking out of the ring: both front paws rest on the lower edge of the ring and overlap it, and the tips of the ears may slightly overlap the top of the ring. Symmetrical friendly pose, mouth closed with a gentle smile.
+COMPOSITION (always identical, no matter how the photo looks): pure white square canvas. Centered on it, one large perfect circle drawn with a thick black ring; the inside of the circle is pure white too. The circle fills about 80% of the canvas width. The pet is shown from the chest up, facing the viewer, head centered and upright, looking straight at the camera, peeking out of the ring: both front paws rest on the lower edge of the ring and overlap it, and the tips of the ears may slightly overlap the top of the ring. Symmetrical friendly pose, mouth closed with a gentle smile.
 
-STYLE: clean vector cartoon, uniform thick black outlines, flat solid fills only, 3 to 5 colours in total taken from the pet's real coat, big glossy black eyes with one small white highlight each. Bold simple shapes that can be 3D printed in a few colours: avoid hair-thin lines. No gradients, no shading, no texture, no fur detail beyond a few short strokes, no background scene, no text, no collar, no accessories, no drop shadow.
+COLOURS (strict): the whole image uses AT MOST 4 flat colours: (1) pure black for every outline, the eyes and the nose; (2) pure white for the background and for white or very light fur; (3) and (4) at most two coat colours that are clearly different from each other and from black and white. Never use two similar shades of the same colour: no light brown next to mid brown, no pink inner ears, no grey shadows. Merge every similar tone into one single flat colour. For a black or very dark pet, fill the fur with one medium grey (#6B6B6B) or medium brown, clearly lighter than the black outlines, so the outlines stay visible. For an all-white pet, use white fur with black outlines and at most one accent colour.
 
-LIKENESS: keep the pet's real breed features, ear shape, coat colours and markings so the owner recognises it instantly. Ignore the photo's background, pose, people and objects. If there is more than one animal, draw only the most prominent one.`;
+STYLE: clean vector cartoon, uniform thick black outlines, flat solid fills only, big round black eyes with one small white highlight each. Bold simple shapes, large colour areas, no hair-thin lines, no whiskers. No gradients, no shading, no highlights, no texture, no fur detail beyond a few short thick strokes, no background scene, no text, no collar, no accessories, no drop shadow.
 
-const DEMO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fff"/><circle cx="512" cy="512" r="400" fill="#E6ECF2" stroke="#111" stroke-width="22"/><g fill="#C9793A" stroke="#111" stroke-width="16" stroke-linejoin="round"><path d="M300 330 250 150l170 110zM724 330l50-180-170 110z"/><ellipse cx="512" cy="500" rx="235" ry="215"/><path d="M330 880c0-150 80-230 182-230s182 80 182 230z"/></g><g fill="#FBE9D0" stroke="#111" stroke-width="16"><ellipse cx="512" cy="580" rx="110" ry="88"/><rect x="290" y="840" width="130" height="110" rx="55"/><rect x="604" y="840" width="130" height="110" rx="55"/></g><circle cx="420" cy="470" r="36" fill="#111"/><circle cx="604" cy="470" r="36" fill="#111"/><circle cx="432" cy="458" r="11" fill="#fff"/><circle cx="616" cy="458" r="11" fill="#fff"/><ellipse cx="512" cy="548" rx="34" ry="24" fill="#111"/><path d="M512 572v34m-54 4c20 30 88 30 108 0" fill="none" stroke="#111" stroke-width="14" stroke-linecap="round"/><text x="512" y="1005" text-anchor="middle" font-family="Arial" font-size="40" font-weight="700" fill="#888">ARTE DE TESTE</text></svg>`;
+LIKENESS: keep the pet's real breed features, ear shape, main coat colours and markings so the owner recognises it instantly. Ignore the photo's background, pose, people and objects. If there is more than one animal, draw only the most prominent one.`;
+
+const DEMO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fff"/><circle cx="512" cy="512" r="400" fill="#fff" stroke="#111" stroke-width="22"/><g fill="#C9793A" stroke="#111" stroke-width="16" stroke-linejoin="round"><path d="M300 330 250 150l170 110zM724 330l50-180-170 110z"/><ellipse cx="512" cy="500" rx="235" ry="215"/><path d="M330 880c0-150 80-230 182-230s182 80 182 230z"/></g><g fill="#fff" stroke="#111" stroke-width="16"><ellipse cx="512" cy="580" rx="110" ry="88"/><rect x="290" y="840" width="130" height="110" rx="55"/><rect x="604" y="840" width="130" height="110" rx="55"/></g><circle cx="420" cy="470" r="36" fill="#111"/><circle cx="604" cy="470" r="36" fill="#111"/><circle cx="432" cy="458" r="11" fill="#fff"/><circle cx="616" cy="458" r="11" fill="#fff"/><ellipse cx="512" cy="548" rx="34" ry="24" fill="#111"/><path d="M512 572v34m-54 4c20 30 88 30 108 0" fill="none" stroke="#111" stroke-width="14" stroke-linecap="round"/><text x="512" y="1005" text-anchor="middle" font-family="Arial" font-size="40" font-weight="700" fill="#111">ARTE DE TESTE</text></svg>`;
 
 // ───────────────────────── utilidades ─────────────────────────
 
@@ -119,6 +122,7 @@ function cfg(s: Settings) {
     priceCents: Math.max(100, parseInt(s.price_cents || "4990", 10) || 4990),
     credits: Math.min(10, Math.max(1, parseInt(s.credits_per_order || "3", 10) || 3)),
     testMode: s.test_mode === "true",
+    maxColors: Math.min(6, Math.max(2, parseInt(s.max_colors || "4", 10) || 4)),
     adminHash: s.admin_password_hash || "",
   };
 }
@@ -255,6 +259,12 @@ async function runGeneration(genId: string, orderId: string, photo: Uint8Array, 
         throw new Error(`openai ${res.status}: ${body?.error?.code ?? ""} ${body?.error?.message ?? "sem imagem"}`);
       }
       bytes = b64ToBytes(b64);
+      // Garante o limite de cores da impressão: o cliente escolhe vendo o resultado final.
+      try {
+        bytes = flattenColors(bytes, c.maxColors).png;
+      } catch (err) {
+        console.error("redução de cores falhou; mantendo a arte original", err);
+      }
     } else if (c.testMode) {
       await sleep(4000);
       bytes = new TextEncoder().encode(DEMO_SVG);
@@ -502,6 +512,7 @@ function settingsView(s: Settings) {
     price_cents: c.priceCents,
     credits_per_order: c.credits,
     test_mode: c.testMode,
+    max_colors: c.maxColors,
     openai_image_model: c.imageModel,
     openai_image_quality: c.imageQuality,
     mp_access_token: mask(c.mpToken),
@@ -572,6 +583,11 @@ async function adminSaveSettings(b: Body) {
     const v = parseInt(b.credits_per_order, 10);
     if (!(v >= 1 && v <= 10)) throw new HttpError(400, "Número de tentativas inválido (1 a 10).");
     await saveSetting("credits_per_order", String(v));
+  }
+  if (b.max_colors !== undefined) {
+    const v = parseInt(b.max_colors, 10);
+    if (!(v >= 2 && v <= 6)) throw new HttpError(400, "Número de cores inválido (2 a 6).");
+    await saveSetting("max_colors", String(v));
   }
   if (b.test_mode !== undefined) await saveSetting("test_mode", b.test_mode ? "true" : "false");
   if (typeof b.mp_access_token === "string" && b.mp_access_token.trim()) await saveSetting("mp_access_token", b.mp_access_token.trim());

@@ -5,6 +5,7 @@
   let password = sessionStorage.getItem(KEY) || "";
   let orders = [];
   let filter = "aguardando";
+  let maxColors = 4;
 
   const call = (action, data) => PN.api(action, data, password);
 
@@ -123,7 +124,7 @@
     const fileBase = (o.code + (o.pet_name ? "-" + o.pet_name : "")).replace(/[^\w-]+/g, "_");
 
     // coluna 1 — arte e arquivos
-    const colors = el("select", { "aria-label": "Número de cores do SVG" }, ...[3, 4, 5, 6, 8, 10].map((n) => el("option", { value: n, selected: n === 6 }, n + " cores")));
+    const colors = el("select", { "aria-label": "Número de cores do SVG" }, ...[2, 3, 4, 5, 6].map((n) => el("option", { value: n, selected: n === maxColors }, n + " cores")));
     const svgBtn = el("button", { class: "btn green sm", type: "button", onclick: async () => {
       svgBtn.disabled = true; const t = svgBtn.textContent; svgBtn.textContent = "Vetorizando…";
       try { await downloadSvg(chosen.art_url, fileBase + ".svg", parseInt(colors.value, 10)); }
@@ -310,6 +311,8 @@
     f.price.value = (s.price_cents / 100).toFixed(2).replace(".", ",");
     f.credits.value = s.credits_per_order;
     f.test_mode.checked = s.test_mode;
+    maxColors = s.max_colors || 4;
+    f.max_colors.value = maxColors;
     f.openai_image_model.value = s.openai_image_model;
     f.openai_image_quality.value = s.openai_image_quality;
     f.mp_access_token.value = "";
@@ -344,6 +347,7 @@
         price_cents: price,
         credits_per_order: f.credits.value,
         test_mode: f.test_mode.checked,
+        max_colors: f.max_colors.value,
         mp_access_token: f.mp_access_token.value,
         openai_api_key: f.openai_api_key.value,
         openai_image_model: f.openai_image_model.value,

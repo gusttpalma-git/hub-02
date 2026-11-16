@@ -95,6 +95,8 @@
           <h3>Loja</h3>
           <label class="field"><span>Preço do enfeite (R$)</span><input name="price" inputmode="decimal" required></label>
           <label class="field"><span>Artes por pedido <small>(tentativas do cliente)</small></span><input name="credits" type="number" min="1" max="10" required></label>
+          <label class="field"><span>Cores do enfeite <small>(máximo, contando preto e branco)</small></span>
+            <select name="max_colors"><option value="2">2 cores</option><option value="3">3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></label>
           <label class="switch"><input type="checkbox" name="test_mode"> Modo de teste <small class="muted">(pedidos sem cobrança)</small></label>
           <p class="small muted" style="margin:8px 0 0">Com o modo de teste ligado, qualquer pessoa cria pedidos grátis. Use só para testar e desligue antes de anunciar.</p>
         </div>
