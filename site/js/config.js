@@ -16,6 +16,10 @@ window.PN_CONFIG = {
   TAMANHO: "8 cm",
   PRAZO_PRODUCAO: "5 dias úteis",
 
+  // Anúncios (opcional): com os IDs preenchidos, o site avisa o Meta/Google de cada venda.
+  META_PIXEL_ID: "",   // ex.: "123456789012345"
+  GOOGLE_TAG_ID: "",   // ex.: "G-XXXXXXX" ou "AW-XXXXXXX"
+
   // Dados da empresa para o rodapé e a página de políticas.
   RAZAO_SOCIAL: "",
   CNPJ: "",

@@ -117,6 +117,40 @@
           </div>
         </div>
         <div class="card">
+          <h3>Frete</h3>
+          <label class="field"><span>Como cobrar o frete</span>
+            <select name="shipping_mode">
+              <option value="incluso">Frete incluso no preço (não cobra à parte)</option>
+              <option value="tabela">Valor fixo por região do Brasil</option>
+              <option value="melhor_envio">Cálculo automático pelo CEP (Melhor Envio)</option>
+            </select></label>
+          <div id="ship-table">
+            <p class="small muted" style="margin:0 0 8px">Valor por região (R$). No cálculo automático, estes valores só são usados se a cotação falhar.</p>
+            <div class="row2">
+              <label class="field"><span>Sudeste</span><input name="ship_sudeste" inputmode="decimal"></label>
+              <label class="field"><span>Sul</span><input name="ship_sul" inputmode="decimal"></label>
+              <label class="field"><span>Centro-Oeste</span><input name="ship_centro_oeste" inputmode="decimal"></label>
+              <label class="field"><span>Nordeste</span><input name="ship_nordeste" inputmode="decimal"></label>
+              <label class="field"><span>Norte</span><input name="ship_norte" inputmode="decimal"></label>
+            </div>
+          </div>
+          <div id="ship-me">
+            <p class="small muted">Crie uma conta grátis em melhorenvio.com.br → Gerenciar → Tokens → gere um token com a permissão de calcular fretes. <span class="state" id="me-state"></span></p>
+            <label class="field"><span>Token do Melhor Envio</span><input name="melhor_envio_token" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
+            <div class="row2">
+              <label class="field"><span>CEP de onde você envia</span><input name="origin_cep" inputmode="numeric" placeholder="00000-000"></label>
+              <label class="field"><span>Peso do pacote (g)</span><input name="package_weight_g" type="number" min="10" max="30000"></label>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>E-mails automáticos <span class="state" id="mail-state"></span></h3>
+          <p class="small muted">O cliente recebe o link do pedido ao pagar, a confirmação e o rastreio; você recebe um aviso a cada pedido pronto para produzir. Crie uma conta grátis em resend.com, valide o seu domínio e gere uma API Key.</p>
+          <label class="field"><span>API Key do Resend</span><input name="resend_api_key" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
+          <label class="field"><span>Remetente <small>(e-mail do domínio validado)</small></span><input name="email_from" placeholder="Patinha de Natal &lt;pedidos@seudominio.com.br&gt;"></label>
+          <label class="field"><span>Seu e-mail <small>(para receber os avisos)</small></span><input name="owner_email" type="email"></label>
+        </div>
+        <div class="card">
           <h3>Senha do painel</h3>
           <label class="field"><span>Nova senha <small>(mín. 8 caracteres)</small></span><input name="new_password" type="password" autocomplete="new-password" placeholder="Deixe em branco para manter"></label>
         </div>

@@ -11,6 +11,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { flattenColors } from "./flatten.ts";
+import { esc, mailLayout, quoteShipping, REGIONS, sendMail } from "./extras.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -112,6 +113,14 @@ async function loadSettings(): Promise<Settings> {
   return s;
 }
 
+function parseTable(raw: string | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  let parsed: Record<string, unknown> = {};
+  try { parsed = JSON.parse(raw || "{}"); } catch (_) { /* tabela vazia */ }
+  for (const r of REGIONS) out[r] = Math.max(0, Math.round(Number(parsed[r]) || 0));
+  return out;
+}
+
 function cfg(s: Settings) {
   const env = (k: string) => (Deno.env.get(k) ?? "").trim();
   return {
@@ -124,6 +133,20 @@ function cfg(s: Settings) {
     testMode: s.test_mode === "true",
     maxColors: Math.min(6, Math.max(2, parseInt(s.max_colors || "4", 10) || 4)),
     adminHash: s.admin_password_hash || "",
+    shipping: {
+      mode: ["incluso", "tabela", "melhor_envio"].includes(s.shipping_mode) ? s.shipping_mode : "incluso",
+      table: parseTable(s.shipping_table),
+      originCep: digits(s.origin_cep),
+      melhorEnvioToken: env("MELHOR_ENVIO_TOKEN") || s.melhor_envio_token || "",
+      weightGrams: Math.max(10, parseInt(s.package_weight_g || "100", 10) || 100),
+      contactEmail: s.owner_email || "",
+    },
+    mail: {
+      apiKey: env("RESEND_API_KEY") || s.resend_api_key || "",
+      from: s.email_from || "",
+      brand: s.brand_name || "Patinha de Natal",
+    },
+    ownerEmail: s.owner_email || "",
   };
 }
 
@@ -163,11 +186,49 @@ async function applyPayment(payment: any) {
       console.error("pagamento com valor divergente", orderId, paidCents, order.amount_cents);
       return;
     }
-    await db.from("pn_orders")
+    const { data: paid } = await db.from("pn_orders")
       .update({ payment_status: "paid", paid_at: new Date().toISOString(), mp_payment_id: String(payment.id) })
-      .eq("id", orderId).eq("payment_status", "pending");
+      .eq("id", orderId).eq("payment_status", "pending").select("*");
+    if (paid?.length) await notify("paid", paid[0], cfg(await loadSettings()));
   } else if (["refunded", "charged_back"].includes(payment.status) && order.payment_status === "paid") {
     await db.from("pn_orders").update({ payment_status: "refunded" }).eq("id", orderId);
+  }
+}
+
+// ───────────────────────── e-mails do pedido ─────────────────────────
+
+// deno-lint-ignore no-explicit-any
+async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: ReturnType<typeof cfg>) {
+  if (!c.mail.apiKey || !c.mail.from) return;
+  const link = order.site_url ? `${order.site_url}criar.html?t=${order.token}` : "";
+  const first = esc(String(order.name || "").split(" ")[0]);
+  const button = link ? { text: event === "paid" ? "Enviar a foto do meu pet" : "Acompanhar meu pedido", url: link } : undefined;
+  if (event === "paid") {
+    await sendMail(c.mail, order.email, `Pagamento confirmado — pedido ${order.code}`, mailLayout(c.mail.brand, "Pagamento confirmado! 🎄", [
+      `Olá, ${first}! Recebemos o seu pagamento.`,
+      "Agora é só enviar a foto do seu pet, escolher a arte e informar o endereço de entrega.",
+      "Guarde este e-mail: o botão abaixo abre o seu pedido em qualquer aparelho.",
+    ], button));
+  } else if (event === "confirmed") {
+    const address = `${esc(order.street)}, ${esc(order.number)}${order.complement ? " — " + esc(order.complement) : ""}<br>${esc(order.district)} · ${esc(order.city)}/${esc(order.state)} · CEP ${esc(order.cep)}`;
+    await sendMail(c.mail, order.email, `Pedido ${order.code} confirmado`, mailLayout(c.mail.brand, "Seu enfeite vai para a produção 🐾", [
+      `Olá, ${first}! Recebemos a arte escolhida e o endereço.`,
+      `<strong>Entrega para:</strong><br>${esc(order.recipient)}<br>${address}`,
+      "Assim que o pacote for postado, você recebe o código de rastreio por e-mail.",
+    ], button));
+    if (c.ownerEmail) {
+      await sendMail(c.mail, c.ownerEmail, `Novo pedido para produzir — ${order.code}`, mailLayout(c.mail.brand, `Pedido ${esc(order.code)} pronto para produzir`, [
+        `<strong>Cliente:</strong> ${esc(order.name)} · ${esc(order.whatsapp)}`,
+        `<strong>Pet:</strong> ${esc(order.pet_name || "—")}`,
+        `<strong>Entrega:</strong><br>${esc(order.recipient)}<br>${address}`,
+        "A arte está no painel, pronta para baixar em SVG.",
+      ]));
+    }
+  } else {
+    await sendMail(c.mail, order.email, `Seu enfeite foi enviado — pedido ${order.code}`, mailLayout(c.mail.brand, "Seu enfeite está a caminho! 📦", [
+      `Olá, ${first}! Postamos o seu pedido.`,
+      order.tracking_code ? `<strong>Código de rastreio:</strong> ${esc(order.tracking_code)}` : "Em breve o código de rastreio aparece na página do pedido.",
+    ], button));
   }
 }
 
@@ -225,6 +286,9 @@ async function orderView(order: any) {
     production_status: o.production_status,
     tracking_code: o.tracking_code,
     pet_name: o.pet_name,
+    amount_cents: o.amount_cents,
+    shipping_cents: o.shipping_cents,
+    locked_cep: o.shipping_cents > 0 ? o.cep : null,
     address: o.confirmed_at
       ? { recipient: o.recipient, cep: o.cep, street: o.street, number: o.number, complement: o.complement, district: o.district, city: o.city, state: o.state }
       : null,
@@ -299,7 +363,20 @@ async function publicConfig() {
     credits: c.credits,
     test_mode: c.testMode,
     sales_open: c.testMode || !!c.mpToken,
+    shipping_mode: c.shipping.mode === "incluso" ? "incluso" : "calculado",
   });
+}
+
+async function quote(b: Body) {
+  const c = cfg(await loadSettings());
+  const cep = digits(b.cep);
+  if (cep.length !== 8) throw new HttpError(400, "Confira o CEP (8 números).");
+  try {
+    const q = await quoteShipping(c.shipping, cep);
+    return json({ shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, total_cents: c.priceCents + q.cents });
+  } catch (_) {
+    throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
+  }
 }
 
 async function checkout(b: Body) {
@@ -324,6 +401,19 @@ async function checkout(b: Body) {
     throw new HttpError(503, "As vendas ainda não foram abertas. Volte em breve!");
   }
 
+  // O frete é sempre recalculado aqui: o valor cobrado nunca vem do navegador.
+  let shipping = { cents: 0, label: "Frete incluso" };
+  const cep = digits(b.cep);
+  if (c.shipping.mode !== "incluso") {
+    if (cep.length !== 8) throw new HttpError(400, "Digite o CEP de entrega (8 números).");
+    try {
+      shipping = await quoteShipping(c.shipping, cep);
+    } catch (_) {
+      throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
+    }
+  }
+  const totalCents = c.priceCents + shipping.cents;
+
   const token = randomHex(24);
   const { data: order, error } = await db.from("pn_orders").insert({
     code: orderCode(),
@@ -331,15 +421,22 @@ async function checkout(b: Body) {
     name,
     email,
     whatsapp,
-    amount_cents: c.priceCents,
+    amount_cents: totalCents,
+    shipping_cents: shipping.cents,
+    shipping_label: shipping.label,
+    ...(shipping.cents > 0 ? { cep } : {}),
+    site_url: base,
     credits_total: c.credits,
     is_test: c.testMode,
     ...(c.testMode ? { payment_status: "paid", paid_at: new Date().toISOString() } : {}),
-  }).select("id, code").single();
+  }).select("*").single();
   if (error || !order) throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
 
   const studio = `${base}criar.html?t=${token}`;
-  if (c.testMode) return json({ redirect: studio, token });
+  if (c.testMode) {
+    await notify("paid", order, c);
+    return json({ redirect: studio, token });
+  }
 
   try {
     const pref = await mp(c.mpToken, "/checkout/preferences", {
@@ -352,7 +449,14 @@ async function checkout(b: Body) {
           quantity: 1,
           currency_id: "BRL",
           unit_price: c.priceCents / 100,
-        }],
+        }, ...(shipping.cents > 0 ? [{
+          id: "frete",
+          title: "Frete",
+          description: shipping.label,
+          quantity: 1,
+          currency_id: "BRL",
+          unit_price: shipping.cents / 100,
+        }] : [])],
         payer: { name, email },
         external_reference: order.id,
         back_urls: { success: studio, pending: studio, failure: `${base}index.html?pagamento=falhou#comprar` },
@@ -452,7 +556,8 @@ async function confirm(b: Body) {
   const a = {
     pet_name: clean(b.pet_name, 60) || null,
     recipient: clean(b.recipient, 120),
-    cep: digits(b.cep),
+    // Se o frete foi cobrado por CEP, a entrega é nesse CEP.
+    cep: order.shipping_cents > 0 && order.cep ? order.cep : digits(b.cep),
     street: clean(b.street, 160),
     number: clean(b.number, 20),
     complement: clean(b.complement, 80) || null,
@@ -471,7 +576,9 @@ async function confirm(b: Body) {
   await db.from("pn_orders")
     .update({ ...a, confirmed_at: order.confirmed_at ?? new Date().toISOString() })
     .eq("id", order.id);
-  return json({ order: await orderView(await getOrderByToken(b.token)) });
+  const saved = await getOrderByToken(b.token);
+  if (!order.confirmed_at) await notify("confirmed", saved, cfg(await loadSettings()));
+  return json({ order: await orderView(saved) });
 }
 
 async function mpWebhook(req: Request, url: URL) {
@@ -517,6 +624,14 @@ function settingsView(s: Settings) {
     openai_image_quality: c.imageQuality,
     mp_access_token: mask(c.mpToken),
     openai_api_key: mask(c.openaiKey),
+    shipping_mode: c.shipping.mode,
+    shipping_table: c.shipping.table,
+    origin_cep: c.shipping.originCep,
+    package_weight_g: c.shipping.weightGrams,
+    melhor_envio_token: mask(c.shipping.melhorEnvioToken),
+    resend_api_key: mask(c.mail.apiKey),
+    email_from: c.mail.from,
+    owner_email: c.ownerEmail,
     webhook_url: `${FUNCTION_URL}?action=mp-webhook`,
   };
 }
@@ -537,6 +652,7 @@ async function adminOrders(b: Body) {
     orders: (orders ?? []).map((o) => ({
       id: o.id, code: o.code, created_at: o.created_at, paid_at: o.paid_at, confirmed_at: o.confirmed_at,
       name: o.name, email: o.email, whatsapp: o.whatsapp, amount_cents: o.amount_cents,
+      shipping_cents: o.shipping_cents, shipping_label: o.shipping_label,
       payment_status: o.payment_status, is_test: o.is_test, mp_payment_id: o.mp_payment_id,
       credits_total: o.credits_total, credits_used: o.credits_used,
       pet_name: o.pet_name, recipient: o.recipient, cep: o.cep, street: o.street, number: o.number,
@@ -568,8 +684,12 @@ async function adminUpdateOrder(b: Body) {
   }
   if (b.reopen === true) patch.confirmed_at = null;
   if (!Object.keys(patch).length) return json({ ok: true });
-  const { error } = await db.from("pn_orders").update(patch).eq("id", b.id);
+  const { data: before } = await db.from("pn_orders").select("production_status").eq("id", b.id).maybeSingle();
+  const { data: after, error } = await db.from("pn_orders").update(patch).eq("id", b.id).select("*").maybeSingle();
   if (error) throw new HttpError(500, "Não foi possível salvar.");
+  if (after && after.production_status === "enviado" && before?.production_status !== "enviado") {
+    await notify("shipped", after, cfg(await loadSettings()));
+  }
   return json({ ok: true });
 }
 
@@ -590,6 +710,26 @@ async function adminSaveSettings(b: Body) {
     await saveSetting("max_colors", String(v));
   }
   if (b.test_mode !== undefined) await saveSetting("test_mode", b.test_mode ? "true" : "false");
+  if (typeof b.shipping_mode === "string" && ["incluso", "tabela", "melhor_envio"].includes(b.shipping_mode)) {
+    await saveSetting("shipping_mode", b.shipping_mode);
+  }
+  if (b.shipping_table && typeof b.shipping_table === "object") {
+    await saveSetting("shipping_table", JSON.stringify(parseTable(JSON.stringify(b.shipping_table))));
+  }
+  if (typeof b.origin_cep === "string") {
+    const v = digits(b.origin_cep);
+    if (v && v.length !== 8) throw new HttpError(400, "CEP de origem inválido.");
+    await saveSetting("origin_cep", v);
+  }
+  if (b.package_weight_g !== undefined) {
+    const v = parseInt(b.package_weight_g, 10);
+    if (!(v >= 10 && v <= 30000)) throw new HttpError(400, "Peso do pacote inválido.");
+    await saveSetting("package_weight_g", String(v));
+  }
+  if (typeof b.melhor_envio_token === "string" && b.melhor_envio_token.trim()) await saveSetting("melhor_envio_token", b.melhor_envio_token.trim());
+  if (typeof b.resend_api_key === "string" && b.resend_api_key.trim()) await saveSetting("resend_api_key", b.resend_api_key.trim());
+  if (typeof b.email_from === "string") await saveSetting("email_from", clean(b.email_from, 160));
+  if (typeof b.owner_email === "string") await saveSetting("owner_email", clean(b.owner_email, 160).toLowerCase());
   if (typeof b.mp_access_token === "string" && b.mp_access_token.trim()) await saveSetting("mp_access_token", b.mp_access_token.trim());
   if (typeof b.openai_api_key === "string" && b.openai_api_key.trim()) await saveSetting("openai_api_key", b.openai_api_key.trim());
   if (typeof b.openai_image_model === "string" && b.openai_image_model.trim()) await saveSetting("openai_image_model", clean(b.openai_image_model, 60));
@@ -617,6 +757,7 @@ Deno.serve(async (req) => {
     const body: Body = await req.json().catch(() => ({}));
     switch (body.action) {
       case "config": return await publicConfig();
+      case "quote": return await quote(body);
       case "checkout": return await checkout(body);
       case "order": return await getOrder(body);
       case "recover": return await recover(body);

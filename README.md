@@ -1,7 +1,7 @@
 # Patinha de Natal 🎄🐾
 
 Loja de um produto só: o cliente paga, envia a foto do pet, a IA cria a arte
-(sempre na mesma pose, dentro do aro), ele escolhe uma entre até 3 e informa o
+(sempre na mesma pose, dentro do aro), ele escolhe uma entre até 4 e informa o
 endereço. Você recebe o pedido no painel com o SVG pronto para a impressora 3D.
 
 ## O que tem aqui
@@ -23,7 +23,7 @@ Páginas do site:
 
 ### 1. Backend (Supabase)
 
-1. No SQL Editor do projeto, rode `supabase/migrations/001_patinha_de_natal.sql`.
+1. No SQL Editor do projeto, rode os arquivos de `supabase/migrations/` em ordem.
 2. Publique a função `supabase/functions/pn-api` com o nome **`pn-api`** e a opção
    **Verify JWT desligada** (a função faz a própria autenticação).
    Pela CLI: `supabase functions deploy pn-api --no-verify-jwt`
@@ -60,10 +60,20 @@ Ligue o **Modo de teste** em Configurações: os pedidos passam direto, sem cobr
 Com a chave da OpenAI preenchida a arte é gerada de verdade; sem ela aparece uma arte
 de exemplo. **Desligue o modo de teste antes de divulgar o site.**
 
+### Frete, e-mails e anúncios (opcionais, também pelo painel)
+
+- **Frete**: em Configurações escolha "incluso", "valor fixo por região" ou "cálculo automático pelo CEP".
+  O automático usa o Melhor Envio (conta grátis; token com permissão de calcular fretes) e cai na
+  tabela por região se a cotação falhar. Com frete cobrado, o cliente informa o CEP antes de pagar.
+- **E-mails**: com uma API Key do Resend e um remetente de domínio validado, o cliente recebe o link do
+  pedido ao pagar, a confirmação e o rastreio; você recebe um aviso a cada pedido pronto para produzir.
+- **Anúncios**: preencha `META_PIXEL_ID` e/ou `GOOGLE_TAG_ID` em `site/js/config.js` para o site
+  registrar início de compra e venda concluída.
+
 ## Dia a dia
 
 1. O pedido aparece em **Para produzir** quando o cliente escolhe a arte e confirma o endereço.
-2. **Baixar SVG** vetoriza a arte em 3–10 cores chapadas (escolha a quantidade) para importar no fatiador.
+2. **Baixar SVG** vetoriza a arte nas mesmas cores chapadas que o cliente viu (4 por padrão) para importar no fatiador.
 3. Mude a situação para **Em produção** → **Enviado** e cole o código de rastreio. O cliente vê tudo em `criar.html`.
 4. Se o cliente não gostou de nenhuma arte, use **+1 tentativa de arte** no pedido.
 

@@ -156,7 +156,7 @@
         el("dt", {}, "WhatsApp"), el("dd", {}, el("a", { href: "https://wa.me/55" + o.whatsapp, target: "_blank", rel: "noopener" }, PN.maskPhone(o.whatsapp))),
         el("dt", {}, "E-mail"), el("dd", {}, o.email),
         el("dt", {}, "Pet"), el("dd", {}, o.pet_name || "—"),
-        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents)),
+        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "")),
         el("dt", {}, "Artes"), el("dd", {}, o.credits_used + " de " + o.credits_total + " usadas"),
       ),
       addr ? el("div", {}, el("div", { class: "addr" }, addr), copyBtn) : el("p", { class: "muted small", style: "margin-top:12px" }, "Endereço ainda não informado."),
@@ -315,6 +315,16 @@
     f.max_colors.value = maxColors;
     f.openai_image_model.value = s.openai_image_model;
     f.openai_image_quality.value = s.openai_image_quality;
+    const brl = (cents) => ((cents || 0) / 100).toFixed(2).replace(".", ",");
+    f.shipping_mode.value = s.shipping_mode;
+    REGIONS.forEach((r) => { f["ship_" + r].value = brl(s.shipping_table[r]); });
+    f.origin_cep.value = s.origin_cep ? PN.maskCep(s.origin_cep) : "";
+    f.package_weight_g.value = s.package_weight_g;
+    f.melhor_envio_token.value = "";
+    f.resend_api_key.value = "";
+    f.email_from.value = s.email_from || "";
+    f.owner_email.value = s.owner_email || "";
+    showShipping();
     f.mp_access_token.value = "";
     f.openai_api_key.value = "";
     f.new_password.value = "";
@@ -322,6 +332,8 @@
     const mark = (id, v) => { const n = $(id); n.textContent = v ? "✓ configurado (" + v + ")" : "✗ falta configurar"; n.className = "state " + (v ? "ok" : "no"); };
     mark("#mp-state", s.mp_access_token);
     mark("#ai-state", s.openai_api_key);
+    mark("#me-state", s.melhor_envio_token);
+    mark("#mail-state", s.resend_api_key && s.email_from ? s.resend_api_key : "");
 
     const missing = [];
     if (!s.mp_access_token) missing.push("o Access Token do Mercado Pago");
@@ -333,6 +345,19 @@
     alert.textContent = parts.join(" ");
     alert.hidden = !parts.length;
   }
+
+  const REGIONS = ["sudeste", "sul", "centro_oeste", "nordeste", "norte"];
+  const toCents = (text) => {
+    const raw = String(text).trim().replace(/[^\d.,]/g, "");
+    const n = parseFloat(raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw);
+    return Math.round((n || 0) * 100);
+  };
+  function showShipping() {
+    const mode = $("#settings").shipping_mode.value;
+    $("#ship-table").hidden = mode === "incluso";
+    $("#ship-me").hidden = mode !== "melhor_envio";
+  }
+  $("#settings").shipping_mode.addEventListener("change", showShipping);
 
   $("#settings").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -348,6 +373,14 @@
         credits_per_order: f.credits.value,
         test_mode: f.test_mode.checked,
         max_colors: f.max_colors.value,
+        shipping_mode: f.shipping_mode.value,
+        shipping_table: Object.fromEntries(REGIONS.map((r) => [r, toCents(f["ship_" + r].value)])),
+        origin_cep: f.origin_cep.value,
+        package_weight_g: f.package_weight_g.value,
+        melhor_envio_token: f.melhor_envio_token.value,
+        resend_api_key: f.resend_api_key.value,
+        email_from: f.email_from.value,
+        owner_email: f.owner_email.value,
         mp_access_token: f.mp_access_token.value,
         openai_api_key: f.openai_api_key.value,
         openai_image_model: f.openai_image_model.value,

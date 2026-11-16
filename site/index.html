@@ -33,7 +33,7 @@
           <p class="lead">Você envia uma foto. A gente transforma em um enfeite com a carinha dele e entrega na sua casa.</p>
           <div class="price-tag">
             <strong data-price>R$ 49,90</strong>
-            <span>frete incluso · Pix ou cartão</span>
+            <span><span data-frete>frete incluso</span> · Pix ou cartão</span>
           </div>
           <a class="btn" href="#comprar">Quero o enfeite do meu pet</a>
           <ul class="ticks">
@@ -95,7 +95,7 @@
         <ul class="facts">
           <li><span class="icon">🎄</span>Enfeite de <span data-tamanho>8 cm</span> pronto para pendurar</li>
           <li><span class="icon">🐾</span>Arte única, feita da foto do seu pet</li>
-          <li><span class="icon">✨</span><span data-credits>3</span> artes para você escolher a preferida</li>
+          <li><span class="icon">✨</span><span data-credits>4</span> artes para você escolher a preferida</li>
           <li><span class="icon">📦</span>Envio para todo o Brasil</li>
         </ul>
       </div>
@@ -115,8 +115,19 @@
             <input name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="maria@email.com"></label>
           <label class="field"><span>Seu WhatsApp <small>(com DDD)</small></span>
             <input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
-          <button class="btn block" type="submit" id="checkout-btn">Ir para o pagamento · <span data-price>R$ 49,90</span></button>
+          <div id="cep-block" hidden>
+            <label class="field"><span>CEP de entrega</span>
+              <input name="cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000"></label>
+            <p class="small muted" id="quote-status" style="margin:-10px 0 14px" aria-live="polite"></p>
+            <div class="totals" id="totals" hidden>
+              <div><span>Enfeite personalizado</span><span data-price>R$ 49,90</span></div>
+              <div><span>Frete <small class="muted" id="quote-label"></small></span><span id="quote-shipping"></span></div>
+              <div class="total"><span>Total</span><span id="quote-total"></span></div>
+            </div>
+          </div>
+          <button class="btn block" type="submit" id="checkout-btn">Ir para o pagamento · <span id="btn-total" data-price>R$ 49,90</span></button>
           <p class="secure">🔒 Pagamento seguro pelo Mercado Pago</p>
+          <p class="consent">Ao continuar, você concorda com as nossas <a href="politicas.html" target="_blank">condições de compra e privacidade</a>.</p>
         </form>
       </div>
     </section>
@@ -125,7 +136,7 @@
       <div class="narrow">
         <div class="section-head"><h2>Dúvidas comuns</h2></div>
         <details><summary>Que foto devo enviar?</summary><p>Uma foto em que o rosto do seu pet apareça bem, com boa luz. Não precisa ser profissional: foto de celular funciona muito bem.</p></details>
-        <details><summary>E se eu não gostar da arte?</summary><p>Você pode criar até <span data-credits>3</span> artes, com a mesma foto ou com fotos diferentes, e escolher a que mais gostar. Só produzimos depois da sua escolha.</p></details>
+        <details><summary>E se eu não gostar da arte?</summary><p>Você pode criar até <span data-credits>4</span> artes, com a mesma foto ou com fotos diferentes, e escolher a que mais gostar. Só produzimos depois da sua escolha.</p></details>
         <details><summary>Serve para gato e outros bichinhos?</summary><p>Sim! Cachorro, gato, coelho, passarinho… se dá para ver o rostinho na foto, dá para fazer o enfeite.</p></details>
         <details><summary>Quanto tempo demora para chegar?</summary><p>Produzimos em até <span data-prazo>5 dias úteis</span> depois que você escolhe a arte. Depois disso, o prazo é o da entrega para a sua cidade. Você recebe o código de rastreio.</p></details>
         <details><summary>Como é feito o enfeite?</summary><p>Cada enfeite é impresso em 3D, um por um, com a arte do seu pet em cores. É leve e resistente, feito para durar muitos Natais.</p></details>

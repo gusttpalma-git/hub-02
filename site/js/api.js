@@ -79,6 +79,17 @@
       return d.length > 5 ? d.slice(0, 5) + "-" + d.slice(5) : d;
     },
 
+    // Eventos de conversão para anúncios. Só funciona se os IDs estiverem no config.js.
+    track(event, data) {
+      try {
+        if (window.fbq) window.fbq("track", event, data || {});
+        if (window.gtag) {
+          const map = { InitiateCheckout: "begin_checkout", Purchase: "purchase", PageView: "page_view" };
+          window.gtag("event", map[event] || event, data || {});
+        }
+      } catch (_) { /* bloqueador de anúncios */ }
+    },
+
     // Preenche textos e links que dependem do config.js.
     applyBrand() {
       document.querySelectorAll("[data-marca]").forEach((el) => { el.textContent = C.MARCA || "Patinha de Natal"; });
@@ -92,6 +103,24 @@
       document.querySelectorAll("[data-legal]").forEach((el) => { el.textContent = legal; });
     },
   };
+
+  if (C.META_PIXEL_ID) {
+    /* eslint-disable */
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version="2.0";n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,"script","https://connect.facebook.net/en_US/fbevents.js");
+    /* eslint-enable */
+    window.fbq("init", C.META_PIXEL_ID);
+    window.fbq("track", "PageView");
+  }
+  if (C.GOOGLE_TAG_ID) {
+    const g = document.createElement("script");
+    g.async = true;
+    g.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(C.GOOGLE_TAG_ID);
+    document.head.appendChild(g);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    window.gtag("js", new Date());
+    window.gtag("config", C.GOOGLE_TAG_ID);
+  }
 
   window.PN = PN;
   document.addEventListener("DOMContentLoaded", PN.applyBrand);

@@ -18,7 +18,35 @@
     document.querySelectorAll("[data-price]").forEach((el) => { el.textContent = PN.money(c.price_cents); });
     document.querySelectorAll("[data-credits]").forEach((el) => { el.textContent = c.credits; });
     $("#testbar").hidden = !c.test_mode;
+    state.price = c.price_cents;
+    state.calcShipping = c.shipping_mode === "calculado";
+    $("#cep-block").hidden = !state.calcShipping;
+    document.querySelectorAll("[data-frete]").forEach((el) => { el.textContent = state.calcShipping ? "+ frete para o seu CEP" : "frete incluso"; });
   }).catch(() => { /* mantém os valores padrão do HTML */ });
+
+  // Frete: calculado no servidor assim que o CEP fica completo.
+  const state = { price: 4990, calcShipping: false, quotedCep: "" };
+  form.cep.addEventListener("input", async (e) => {
+    e.target.value = PN.maskCep(e.target.value);
+    const cep = e.target.value.replace(/\D/g, "");
+    const status = $("#quote-status");
+    if (cep.length !== 8) { $("#totals").hidden = true; status.textContent = ""; state.quotedCep = ""; return; }
+    status.textContent = "Calculando o frete…";
+    try {
+      const q = await PN.api("quote", { cep });
+      if (form.cep.value.replace(/\D/g, "") !== cep) return;
+      state.quotedCep = cep;
+      status.textContent = "";
+      $("#quote-label").textContent = q.days ? "· cerca de " + q.days + " dias úteis" : "";
+      $("#quote-shipping").textContent = q.shipping_cents ? PN.money(q.shipping_cents) : "Grátis";
+      $("#quote-total").textContent = PN.money(q.total_cents);
+      $("#btn-total").textContent = PN.money(q.total_cents);
+      $("#totals").hidden = false;
+    } catch (err) {
+      $("#totals").hidden = true;
+      status.textContent = err.message;
+    }
+  });
 
   // Quem já tem pedido neste aparelho vê um atalho no lugar de "Já comprei".
   const saved = PN.getToken();
@@ -41,14 +69,18 @@
       name: form.name.value.trim(),
       email: form.email.value.trim(),
       whatsapp: form.whatsapp.value,
+      cep: form.cep.value,
       site_url: location.href.split(/[?#]/)[0],
     };
     if (data.name.length < 3) { form.name.focus(); return showError(errorBox, "Digite seu nome completo."); }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) { form.email.focus(); return showError(errorBox, "Confira seu e-mail."); }
     if (data.whatsapp.replace(/\D/g, "").length < 10) { form.whatsapp.focus(); return showError(errorBox, "Confira seu WhatsApp com DDD."); }
 
+    if (state.calcShipping && data.cep.replace(/\D/g, "").length !== 8) { form.cep.focus(); return showError(errorBox, "Digite o CEP de entrega para calcularmos o frete."); }
+
     btn.disabled = true;
     btn.textContent = "Abrindo o pagamento…";
+    PN.track("InitiateCheckout", { value: state.price / 100, currency: "BRL" });
     try {
       const out = await PN.api("checkout", data);
       PN.setToken(out.token);

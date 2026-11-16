@@ -64,9 +64,21 @@
       show("login");
       return setError("#login-error", "Este pedido foi cancelado e o valor devolvido. Fale com a gente se precisar de ajuda.");
     }
+    trackPurchase(o);
     if (o.confirmed && state.step !== "address") return renderDone();
     if (state.step === "address") return renderAddress();
     renderStudio();
+  }
+
+  // Avisa os anúncios da venda uma única vez por pedido (nunca em pedidos de teste).
+  function trackPurchase(o) {
+    if (o.is_test) return;
+    const key = "pn_buy_" + o.code;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch (_) { return; }
+    PN.track("Purchase", { value: o.amount_cents / 100, currency: "BRL", transaction_id: o.code });
   }
 
   function renderStudio() {
@@ -88,6 +100,7 @@
         setError("#studio-error", "");
         if (arts.length === 1 && !o.chosen_generation) choose(arts[0].id);
       }
+      maybeShowTips();
     }
     if (busy) { state.mode = "working"; state.watching = busy.id; schedule(3000); startBar(); }
     else if (state.mode === "working" && !state.uploading) state.mode = "idle";
@@ -141,6 +154,10 @@
     $("#preview-img").src = state.photoUrl || "img/favicon.svg";
     $("#next-block").hidden = noArts || state.mode !== "idle";
 
+    const picked = chosenArt();
+    $("#mockup-block").hidden = !picked;
+    if (picked) $("#mockup-art").src = picked.url;
+
     const go = $("#go-address");
     go.disabled = !o.chosen_generation;
     go.textContent = o.chosen_generation ? "Continuar com esta arte →" : "Escolha uma arte acima";
@@ -172,6 +189,14 @@
       f.district.value = a.district || "";
       f.city.value = a.city || "";
       f.state.value = a.state || "";
+    }
+    // Frete cobrado por CEP: a entrega é nesse CEP.
+    if (o.locked_cep) {
+      const first = !f.cep.readOnly;
+      f.cep.value = PN.maskCep(o.locked_cep);
+      f.cep.readOnly = true;
+      $("#cep-status").textContent = "CEP informado na compra (o frete foi calculado para ele).";
+      if (first && !f.street.value) lookupCep(o.locked_cep, true);
     }
     $("#back-arts").hidden = o.confirmed;
     window.scrollTo(0, 0);
@@ -218,6 +243,30 @@
     // Atualiza sozinho de vez em quando para mostrar produção/envio.
     schedule(60000);
   }
+
+  // ───────── dicas de foto ─────────
+
+  const tips = $("#tips");
+  function openTips() {
+    const left = state.order ? state.order.credits_left : 0;
+    $("#tips-left").textContent = left > 0
+      ? (left === 1 ? "Você ainda tem 1 tentativa." : "Você ainda tem " + left + " tentativas.") + " Se a arte não ficou parecida, tente com uma foto assim:"
+      : "Para a arte ficar parecida com o seu pet, a foto ideal é assim:";
+    if (!tips.open) tips.showModal();
+  }
+  // Aparece sozinho, uma única vez, quando o cliente já gastou 2 artes e ainda tem outras.
+  function maybeShowTips() {
+    const o = state.order;
+    const used = o.credits_total - o.credits_left;
+    const key = "pn_tips_" + o.code;
+    let seen = false;
+    try { seen = !!localStorage.getItem(key); } catch (_) { /* modo privado */ }
+    if (used < 2 || o.credits_left === 0 || seen) return;
+    try { localStorage.setItem(key, "1"); } catch (_) { /* modo privado */ }
+    openTips();
+  }
+  tips.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => tips.close()));
+  $("#open-tips").addEventListener("click", openTips);
 
   // ───────── ações ─────────
 
@@ -330,12 +379,17 @@
 
   // endereço
   const af = $("#address-form");
-  af.cep.addEventListener("input", async (e) => {
+  af.cep.addEventListener("input", (e) => {
+    if (e.target.readOnly) return;
     e.target.value = PN.maskCep(e.target.value);
     const cep = e.target.value.replace(/\D/g, "");
+    if (cep.length !== 8) { $("#cep-status").textContent = ""; return; }
+    lookupCep(cep, false);
+  });
+
+  async function lookupCep(cep, quiet) {
     const status = $("#cep-status");
-    if (cep.length !== 8) { status.textContent = ""; return; }
-    status.textContent = "Buscando endereço…";
+    if (!quiet) status.textContent = "Buscando endereço…";
     try {
       const res = await fetch("https://viacep.com.br/ws/" + cep + "/json/");
       const d = await res.json();
@@ -344,12 +398,12 @@
       if (d.bairro) af.district.value = d.bairro;
       if (d.localidade) af.city.value = d.localidade;
       if (d.uf) af.state.value = d.uf;
-      status.textContent = "Endereço encontrado ✓ Confira e preencha o número.";
-      (af.street.value ? af.number : af.street).focus();
+      if (!quiet) status.textContent = "Endereço encontrado ✓ Confira e preencha o número.";
+      if (!quiet) (af.street.value ? af.number : af.street).focus();
     } catch (_) {
-      status.textContent = "Não achamos esse CEP. Preencha o endereço abaixo.";
+      if (!quiet) status.textContent = "Não achamos esse CEP. Preencha o endereço abaixo.";
     }
-  });
+  }
 
   af.addEventListener("submit", async (e) => {
     e.preventDefault();
