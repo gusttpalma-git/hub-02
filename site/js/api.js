@@ -61,9 +61,12 @@
       try { localStorage.removeItem(TOKEN_KEY); } catch (_) { /* modo privado */ }
     },
 
+    store: {},
+
     whatsappLink(text) {
-      if (!C.WHATSAPP) return null;
-      return "https://wa.me/" + C.WHATSAPP + (text ? "?text=" + encodeURIComponent(text) : "");
+      const number = PN.store.whatsapp || C.WHATSAPP;
+      if (!number) return null;
+      return "https://wa.me/" + number + (text ? "?text=" + encodeURIComponent(text) : "");
     },
 
     maskPhone(v) {
@@ -93,34 +96,52 @@
     // Preenche textos e links que dependem do config.js.
     applyBrand() {
       document.querySelectorAll("[data-marca]").forEach((el) => { el.textContent = C.MARCA || "Patinha de Natal"; });
-      document.querySelectorAll("[data-tamanho]").forEach((el) => { el.textContent = C.TAMANHO || ""; });
-      document.querySelectorAll("[data-prazo]").forEach((el) => { el.textContent = C.PRAZO_PRODUCAO || ""; });
+      const S = PN.store;
+      document.querySelectorAll("[data-tamanho]").forEach((el) => { el.textContent = S.size || C.TAMANHO || ""; });
+      document.querySelectorAll("[data-prazo]").forEach((el) => { el.textContent = S.lead_time || C.PRAZO_PRODUCAO || ""; });
+      document.querySelectorAll("[data-aviso]").forEach((el) => { el.textContent = S.notice || ""; el.hidden = !S.notice; });
       document.querySelectorAll("[data-whatsapp]").forEach((el) => {
         const link = PN.whatsappLink(el.dataset.whatsapp || "");
         if (link) { el.href = link; el.hidden = false; } else { el.hidden = true; }
       });
-      const legal = [C.RAZAO_SOCIAL, C.CNPJ && "CNPJ " + C.CNPJ, C.EMAIL_CONTATO].filter(Boolean).join(" · ");
+      const company = S.company || C.RAZAO_SOCIAL, cnpj = S.cnpj || C.CNPJ, mail = S.email || C.EMAIL_CONTATO;
+      const legal = [company, cnpj && "CNPJ " + cnpj, mail].filter(Boolean).join(" · ");
       document.querySelectorAll("[data-legal]").forEach((el) => { el.textContent = legal; });
     },
   };
 
-  if (C.META_PIXEL_ID) {
-    /* eslint-disable */
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version="2.0";n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,"script","https://connect.facebook.net/en_US/fbevents.js");
-    /* eslint-enable */
-    window.fbq("init", C.META_PIXEL_ID);
-    window.fbq("track", "PageView");
+  let tracking = false;
+  function initTracking(metaId, googleId) {
+    if (tracking) return;
+    tracking = true;
+    if (metaId) {
+      /* eslint-disable */
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version="2.0";n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,"script","https://connect.facebook.net/en_US/fbevents.js");
+      /* eslint-enable */
+      window.fbq("init", metaId);
+      window.fbq("track", "PageView");
+    }
+    if (googleId) {
+      const g = document.createElement("script");
+      g.async = true;
+      g.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(googleId);
+      document.head.appendChild(g);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("js", new Date());
+      window.gtag("config", googleId);
+    }
   }
-  if (C.GOOGLE_TAG_ID) {
-    const g = document.createElement("script");
-    g.async = true;
-    g.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(C.GOOGLE_TAG_ID);
-    document.head.appendChild(g);
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function () { window.dataLayer.push(arguments); };
-    window.gtag("js", new Date());
-    window.gtag("config", C.GOOGLE_TAG_ID);
-  }
+
+  // Configuração pública da loja (preço, contato, avisos). Todas as páginas esperam por ela.
+  PN.ready = PN.api("config").then((c) => {
+    PN.store = c.store || {};
+    return c;
+  }).catch(() => null).then((c) => {
+    initTracking(PN.store.meta_pixel_id || C.META_PIXEL_ID, PN.store.google_tag_id || C.GOOGLE_TAG_ID);
+    if (document.readyState !== "loading") PN.applyBrand();
+    return c;
+  });
 
   window.PN = PN;
   document.addEventListener("DOMContentLoaded", PN.applyBrand);

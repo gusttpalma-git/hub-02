@@ -14,7 +14,8 @@
   }
 
   // Preço e nº de tentativas vêm do servidor (o que vale é o que será cobrado).
-  PN.api("config").then((c) => {
+  PN.ready.then((c) => {
+    if (!c) return;
     document.querySelectorAll("[data-price]").forEach((el) => { el.textContent = PN.money(c.price_cents); });
     document.querySelectorAll("[data-credits]").forEach((el) => { el.textContent = c.credits; });
     $("#testbar").hidden = !c.test_mode;

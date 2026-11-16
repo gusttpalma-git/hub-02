@@ -54,9 +54,27 @@
 
   // ───────── desenhar a tela ─────────
 
+  // Botões de suporte: a mensagem já leva o código do pedido e o link de cada arte criada.
+  function updateSupport() {
+    const o = state.order;
+    if (!o) return;
+    const lines = ["Olá! Preciso de ajuda com o meu pedido " + o.code + "."];
+    const arts = o.generations.filter((g) => g.status === "done" && g.share_url);
+    if (arts.length) {
+      lines.push("", arts.length === 1 ? "Arte que eu criei:" : "Artes que eu criei:");
+      arts.forEach((g, i) => lines.push((i + 1) + ") " + g.share_url + (g.id === o.chosen_generation ? "  (escolhida)" : "")));
+    }
+    const link = PN.whatsappLink(lines.join("\n"));
+    document.querySelectorAll("[data-support]").forEach((el) => {
+      if (link) { el.href = link; el.hidden = false; } else { el.hidden = true; }
+    });
+  }
+  PN.ready.then(updateSupport);
+
   function render() {
     const o = state.order;
     clearTimeout(state.timer);
+    updateSupport();
     $("#testbar").hidden = !o.is_test;
 
     if (o.payment_status === "pending") { show("pending"); return schedule(4000); }
@@ -181,6 +199,7 @@
       f.dataset.filled = "1";
       const a = o.address || {};
       f.pet_name.value = o.pet_name || "";
+      f.customer_notes.value = o.customer_notes || "";
       f.recipient.value = a.recipient || o.name || "";
       f.cep.value = a.cep ? PN.maskCep(a.cep) : "";
       f.street.value = a.street || "";
@@ -238,6 +257,14 @@
       document.createTextNode(a.recipient), document.createElement("br"),
       document.createTextNode(a.street + ", " + a.number + (a.complement ? " — " + a.complement : "")), document.createElement("br"),
       document.createTextNode(a.district + " · " + a.city + "/" + a.state + " · CEP " + PN.maskCep(a.cep)));
+    const notes = $("#done-notes");
+    notes.hidden = !o.customer_notes;
+    notes.replaceChildren();
+    if (o.customer_notes) {
+      const t = document.createElement("strong");
+      t.textContent = "Suas observações";
+      notes.append(t, document.createElement("br"), document.createTextNode(o.customer_notes));
+    }
     $("#edit-address").hidden = st !== "aguardando";
 
     // Atualiza sozinho de vez em quando para mostrar produção/envio.
@@ -275,6 +302,7 @@
     const before = state.order.chosen_generation;
     state.order.chosen_generation = id;
     renderStudio();
+    updateSupport();
     try {
       await PN.api("choose", { token: state.token, generation_id: id });
     } catch (err) {
@@ -415,7 +443,8 @@
     try {
       const out = await PN.api("confirm", {
         token: state.token,
-        pet_name: af.pet_name.value, recipient: af.recipient.value, cep: af.cep.value,
+        pet_name: af.pet_name.value, customer_notes: af.customer_notes.value,
+        recipient: af.recipient.value, cep: af.cep.value,
         street: af.street.value, number: af.number.value, complement: af.complement.value,
         district: af.district.value, city: af.city.value, state: af.state.value,
       });

@@ -159,6 +159,7 @@
         el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "")),
         el("dt", {}, "Artes"), el("dd", {}, o.credits_used + " de " + o.credits_total + " usadas"),
       ),
+      o.customer_notes && el("div", { class: "alert info", style: "margin:12px 0 0" }, "Observações do cliente: " + o.customer_notes),
       addr ? el("div", {}, el("div", { class: "addr" }, addr), copyBtn) : el("p", { class: "muted small", style: "margin-top:12px" }, "Endereço ainda não informado."),
     );
 
@@ -315,6 +316,9 @@
     f.max_colors.value = maxColors;
     f.openai_image_model.value = s.openai_image_model;
     f.openai_image_quality.value = s.openai_image_quality;
+    const st = s.store || {};
+    STORE_FIELDS.forEach((k) => { f["st_" + k].value = st[k] || ""; });
+    f.st_whatsapp.value = st.whatsapp ? PN.maskPhone(st.whatsapp.replace(/^55/, "")) : "";
     const brl = (cents) => ((cents || 0) / 100).toFixed(2).replace(".", ",");
     f.shipping_mode.value = s.shipping_mode;
     REGIONS.forEach((r) => { f["ship_" + r].value = brl(s.shipping_table[r]); });
@@ -338,6 +342,7 @@
     const missing = [];
     if (!s.mp_access_token) missing.push("o Access Token do Mercado Pago");
     if (!s.openai_api_key) missing.push("a API Key da OpenAI");
+    if (!(s.store || {}).whatsapp) missing.push("o WhatsApp de atendimento");
     const alert = $("#setup-alert");
     const parts = [];
     if (missing.length) parts.push("Para vender de verdade falta configurar " + missing.join(" e ") + " na aba Configurações.");
@@ -346,6 +351,7 @@
     alert.hidden = !parts.length;
   }
 
+  const STORE_FIELDS = ["whatsapp", "company", "cnpj", "email", "size", "lead_time", "notice", "meta_pixel_id", "google_tag_id"];
   const REGIONS = ["sudeste", "sul", "centro_oeste", "nordeste", "norte"];
   const toCents = (text) => {
     const raw = String(text).trim().replace(/[^\d.,]/g, "");
@@ -373,6 +379,7 @@
         credits_per_order: f.credits.value,
         test_mode: f.test_mode.checked,
         max_colors: f.max_colors.value,
+        store: Object.fromEntries(STORE_FIELDS.map((k) => [k, f["st_" + k].value])),
         shipping_mode: f.shipping_mode.value,
         shipping_table: Object.fromEntries(REGIONS.map((r) => [r, toCents(f["ship_" + r].value)])),
         origin_cep: f.origin_cep.value,

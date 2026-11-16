@@ -147,6 +147,17 @@ function cfg(s: Settings) {
       brand: s.brand_name || "Patinha de Natal",
     },
     ownerEmail: s.owner_email || "",
+    store: {
+      whatsapp: digits(s.store_whatsapp),
+      company: s.store_company || "",
+      cnpj: s.store_cnpj || "",
+      email: s.store_email || "",
+      size: s.store_size || "",
+      lead_time: s.store_lead_time || "",
+      notice: s.store_notice || "",
+      meta_pixel_id: s.meta_pixel_id || "",
+      google_tag_id: s.google_tag_id || "",
+    },
   };
 }
 
@@ -220,6 +231,7 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
       await sendMail(c.mail, c.ownerEmail, `Novo pedido para produzir — ${order.code}`, mailLayout(c.mail.brand, `Pedido ${esc(order.code)} pronto para produzir`, [
         `<strong>Cliente:</strong> ${esc(order.name)} · ${esc(order.whatsapp)}`,
         `<strong>Pet:</strong> ${esc(order.pet_name || "—")}`,
+        ...(order.customer_notes ? [`<strong>Observações do cliente:</strong> ${esc(order.customer_notes)}`] : []),
         `<strong>Entrega:</strong><br>${esc(order.recipient)}<br>${address}`,
         "A arte está no painel, pronta para baixar em SVG.",
       ]));
@@ -280,8 +292,14 @@ async function orderView(order: any) {
     is_test: o.is_test,
     credits_total: o.credits_total,
     credits_left: Math.max(0, o.credits_total - o.credits_used),
-    generations: (gens ?? []).map((g) => ({ id: g.id, status: g.status, url: g.result_path ? urls[g.result_path] ?? null : null })),
+    generations: (gens ?? []).map((g) => ({
+      id: g.id, status: g.status,
+      url: g.result_path ? urls[g.result_path] ?? null : null,
+      // link curto e permanente da arte, para o cliente mandar no WhatsApp
+      share_url: g.result_path ? `${FUNCTION_URL}?action=art&g=${g.id}` : null,
+    })),
     chosen_generation: o.chosen_generation,
+    customer_notes: o.customer_notes,
     confirmed: !!o.confirmed_at,
     production_status: o.production_status,
     tracking_code: o.tracking_code,
@@ -364,7 +382,19 @@ async function publicConfig() {
     test_mode: c.testMode,
     sales_open: c.testMode || !!c.mpToken,
     shipping_mode: c.shipping.mode === "incluso" ? "incluso" : "calculado",
+    store: c.store,
   });
+}
+
+// Abre a arte de uma geração (o id é secreto e impossível de adivinhar).
+async function openArt(url: URL) {
+  const id = url.searchParams.get("g");
+  if (!isUuid(id)) throw new HttpError(404, "Arte não encontrada.");
+  const { data: gen } = await db.from("pn_generations").select("result_path").eq("id", id).eq("status", "done").maybeSingle();
+  if (!gen?.result_path) throw new HttpError(404, "Arte não encontrada.");
+  const { data } = await db.storage.from(BUCKET).createSignedUrl(gen.result_path, 60 * 60);
+  if (!data?.signedUrl) throw new HttpError(404, "Arte não encontrada.");
+  return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
 
 async function quote(b: Body) {
@@ -555,6 +585,7 @@ async function confirm(b: Body) {
 
   const a = {
     pet_name: clean(b.pet_name, 60) || null,
+    customer_notes: clean(b.customer_notes, 500) || null,
     recipient: clean(b.recipient, 120),
     // Se o frete foi cobrado por CEP, a entrega é nesse CEP.
     cep: order.shipping_cents > 0 && order.cep ? order.cep : digits(b.cep),
@@ -632,6 +663,7 @@ function settingsView(s: Settings) {
     resend_api_key: mask(c.mail.apiKey),
     email_from: c.mail.from,
     owner_email: c.ownerEmail,
+    store: c.store,
     webhook_url: `${FUNCTION_URL}?action=mp-webhook`,
   };
 }
@@ -658,6 +690,7 @@ async function adminOrders(b: Body) {
       pet_name: o.pet_name, recipient: o.recipient, cep: o.cep, street: o.street, number: o.number,
       complement: o.complement, district: o.district, city: o.city, state: o.state,
       production_status: o.production_status, tracking_code: o.tracking_code, admin_notes: o.admin_notes,
+      customer_notes: o.customer_notes,
       chosen_generation: o.chosen_generation,
       generations: (gens ?? []).filter((g) => g.order_id === o.id).map((g) => ({
         id: g.id, status: g.status,
@@ -730,6 +763,21 @@ async function adminSaveSettings(b: Body) {
   if (typeof b.resend_api_key === "string" && b.resend_api_key.trim()) await saveSetting("resend_api_key", b.resend_api_key.trim());
   if (typeof b.email_from === "string") await saveSetting("email_from", clean(b.email_from, 160));
   if (typeof b.owner_email === "string") await saveSetting("owner_email", clean(b.owner_email, 160).toLowerCase());
+  if (b.store && typeof b.store === "object") {
+    const st = b.store;
+    const text: [string, string, number][] = [
+      ["company", "store_company", 160], ["cnpj", "store_cnpj", 30], ["email", "store_email", 160],
+      ["size", "store_size", 30], ["lead_time", "store_lead_time", 60], ["notice", "store_notice", 200],
+      ["meta_pixel_id", "meta_pixel_id", 40], ["google_tag_id", "google_tag_id", 40],
+    ];
+    for (const [field, key, max] of text) if (typeof st[field] === "string") await saveSetting(key, clean(st[field], max));
+    if (typeof st.whatsapp === "string") {
+      let w = digits(st.whatsapp);
+      if (w && w.length <= 11) w = "55" + w;
+      if (w && (w.length < 12 || w.length > 13)) throw new HttpError(400, "WhatsApp inválido. Use DDD + número.");
+      await saveSetting("store_whatsapp", w);
+    }
+  }
   if (typeof b.mp_access_token === "string" && b.mp_access_token.trim()) await saveSetting("mp_access_token", b.mp_access_token.trim());
   if (typeof b.openai_api_key === "string" && b.openai_api_key.trim()) await saveSetting("openai_api_key", b.openai_api_key.trim());
   if (typeof b.openai_image_model === "string" && b.openai_image_model.trim()) await saveSetting("openai_image_model", clean(b.openai_image_model, 60));
@@ -751,6 +799,7 @@ Deno.serve(async (req) => {
   try {
     const queryAction = url.searchParams.get("action");
     if (queryAction === "mp-webhook") return await mpWebhook(req, url);
+    if (queryAction === "art") return await openArt(url);
     if (queryAction === "generate" && req.method === "POST") return await generate(req);
     if (req.method !== "POST") return json({ ok: true, service: "patinha-de-natal" });
 
