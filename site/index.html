@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Patinha de Natal — o enfeite de Natal com a carinha do seu pet</title>
+  <meta name="description" content="Envie uma foto do seu pet e receba em casa um enfeite de árvore de Natal personalizado com a carinha dele. Enviamos para todo o Brasil.">
+  <meta property="og:title" content="O enfeite de Natal com a carinha do seu pet">
+  <meta property="og:description" content="Envie a foto, escolha a arte e receba em casa. Enviamos para todo o Brasil.">
+  <meta property="og:image" content="img/exemplo-1-arte.jpg">
+  <meta name="theme-color" content="#fff8ee">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="testbar" id="testbar" hidden>MODO DE TESTE ligado — os pedidos não são cobrados</div>
+
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="img/favicon.svg" alt="" width="38" height="38"><span data-marca>Patinha de Natal</span></a>
+      <button class="linklike" id="open-recover" type="button">Já comprei</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-copy">
+          <h1>Seu pet na árvore de Natal</h1>
+          <p class="lead">Você envia uma foto. A gente transforma em um enfeite com a carinha dele e entrega na sua casa.</p>
+          <div class="price-tag">
+            <strong data-price>R$ 49,90</strong>
+            <span>frete incluso · Pix ou cartão</span>
+          </div>
+          <a class="btn" href="#comprar">Quero o enfeite do meu pet</a>
+          <ul class="ticks">
+            <li>Feito a partir da foto do seu pet</li>
+            <li>Você escolhe a arte antes de produzirmos</li>
+            <li>Entrega em todo o Brasil</li>
+          </ul>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <img class="branch" src="img/galho.svg" alt="">
+          <div class="ornament swing"><img src="img/exemplo-1-arte.jpg" alt=""></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="como-funciona">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>É simples assim</h2>
+          <p>Três passos, tudo pelo celular.</p>
+        </div>
+        <ol class="steps">
+          <li><span class="icon">💳</span><h3>Faça o pedido</h3><p>Pague com Pix ou cartão. É rápido e seguro.</p></li>
+          <li><span class="icon">📸</span><h3>Envie a foto</h3><p>Escolha uma foto do seu pet. Criamos a arte na hora.</p></li>
+          <li><span class="icon">🎁</span><h3>Receba em casa</h3><p>Escolha a arte preferida e diga o endereço. Pronto!</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="exemplos">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Da foto para o enfeite</h2>
+          <p>Qualquer foto serve: deitado, sentado, no sofá. Ele sai sempre de frente, com as patinhas no aro.</p>
+        </div>
+        <div class="examples">
+          <div class="example">
+            <figure><img class="photo" src="img/exemplo-1-foto.jpg" alt="Foto de um chihuahua marrom e branco" loading="lazy">Sua foto</figure>
+            <span class="arrow" aria-hidden="true">➜</span>
+            <figure><div class="ornament sm"><img src="img/exemplo-1-arte.jpg" alt="Enfeite com o desenho do chihuahua" loading="lazy"></div>Seu enfeite</figure>
+          </div>
+          <div class="example">
+            <figure><img class="photo" src="img/exemplo-2-foto.jpg" alt="Foto de um gato laranja deitado" loading="lazy">Sua foto</figure>
+            <span class="arrow" aria-hidden="true">➜</span>
+            <figure><div class="ornament sm"><img src="img/exemplo-2-arte.jpg" alt="Enfeite com o desenho do gato laranja" loading="lazy"></div>Seu enfeite</figure>
+          </div>
+          <div class="example">
+            <figure><img class="photo" src="img/exemplo-3-foto.jpg" alt="Foto de um cachorro preto sentado no sofá" loading="lazy">Sua foto</figure>
+            <span class="arrow" aria-hidden="true">➜</span>
+            <figure><div class="ornament sm"><img src="img/exemplo-3-arte.jpg" alt="Enfeite com o desenho do cachorro preto" loading="lazy"></div>Seu enfeite</figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band-green">
+      <div class="wrap">
+        <div class="section-head"><h2>O que você recebe</h2></div>
+        <ul class="facts">
+          <li><span class="icon">🎄</span>Enfeite de <span data-tamanho>8 cm</span> pronto para pendurar</li>
+          <li><span class="icon">🐾</span>Arte única, feita da foto do seu pet</li>
+          <li><span class="icon">✨</span><span data-credits>3</span> artes para você escolher a preferida</li>
+          <li><span class="icon">📦</span>Envio para todo o Brasil</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="comprar">
+      <div class="narrow">
+        <div class="section-head">
+          <h2>Peça o enfeite do seu pet</h2>
+          <p>Preencha seus dados para começar. A foto você envia logo depois do pagamento.</p>
+        </div>
+        <form class="card" id="checkout" novalidate>
+          <div class="alert error" id="checkout-error" hidden role="alert"></div>
+          <label class="field"><span>Seu nome completo</span>
+            <input name="name" autocomplete="name" required maxlength="120" placeholder="Maria da Silva"></label>
+          <label class="field"><span>Seu e-mail</span>
+            <input name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="maria@email.com"></label>
+          <label class="field"><span>Seu WhatsApp <small>(com DDD)</small></span>
+            <input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
+          <button class="btn block" type="submit" id="checkout-btn">Ir para o pagamento · <span data-price>R$ 49,90</span></button>
+          <p class="secure">🔒 Pagamento seguro pelo Mercado Pago</p>
+        </form>
+      </div>
+    </section>
+
+    <section class="band faq">
+      <div class="narrow">
+        <div class="section-head"><h2>Dúvidas comuns</h2></div>
+        <details><summary>Que foto devo enviar?</summary><p>Uma foto em que o rosto do seu pet apareça bem, com boa luz. Não precisa ser profissional: foto de celular funciona muito bem.</p></details>
+        <details><summary>E se eu não gostar da arte?</summary><p>Você pode criar até <span data-credits>3</span> artes, com a mesma foto ou com fotos diferentes, e escolher a que mais gostar. Só produzimos depois da sua escolha.</p></details>
+        <details><summary>Serve para gato e outros bichinhos?</summary><p>Sim! Cachorro, gato, coelho, passarinho… se dá para ver o rostinho na foto, dá para fazer o enfeite.</p></details>
+        <details><summary>Quanto tempo demora para chegar?</summary><p>Produzimos em até <span data-prazo>5 dias úteis</span> depois que você escolhe a arte. Depois disso, o prazo é o da entrega para a sua cidade. Você recebe o código de rastreio.</p></details>
+        <details><summary>Como é feito o enfeite?</summary><p>Cada enfeite é impresso em 3D, um por um, com a arte do seu pet em cores. É leve e resistente, feito para durar muitos Natais.</p></details>
+        <details><summary>Já paguei. Como volto para enviar a foto?</summary><p>Toque em “Já comprei”, no alto da página, e informe o e-mail e o WhatsApp usados na compra.</p></details>
+      </div>
+    </section>
+
+    <section class="center">
+      <div class="narrow">
+        <h2>Um Natal com quem você ama</h2>
+        <p class="muted">Deixe a árvore deste ano ainda mais especial.</p>
+        <a class="btn" href="#comprar">Quero o enfeite do meu pet</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p><strong data-marca>Patinha de Natal</strong> · <a href="politicas.html">Trocas, entrega e privacidade</a>
+        · <a data-whatsapp="Olá! Tenho uma dúvida sobre o enfeite do meu pet." hidden target="_blank" rel="noopener">Fale no WhatsApp</a></p>
+      <p class="small" data-legal></p>
+    </div>
+  </footer>
+
+  <div class="sticky-cta" id="sticky"><a class="btn block" href="#comprar">Pedir agora · <span data-price>R$ 49,90</span></a></div>
+
+  <dialog id="recover">
+    <button class="close" type="button" aria-label="Fechar" data-close>×</button>
+    <form class="inner" id="recover-form" novalidate>
+      <h3>Continuar meu pedido</h3>
+      <p class="muted">Informe os mesmos dados que você usou na compra.</p>
+      <div class="alert error" id="recover-error" hidden role="alert"></div>
+      <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" required></label>
+      <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required></label>
+      <button class="btn green block" type="submit">Entrar</button>
+    </form>
+  </dialog>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/landing.js"></script>
+</body>
+</html>

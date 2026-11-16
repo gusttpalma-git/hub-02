@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Criar meu enfeite — Patinha de Natal</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#fff8ee">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="testbar" id="testbar" hidden>PEDIDO DE TESTE — não foi cobrado</div>
+
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="img/favicon.svg" alt="" width="38" height="38"><span data-marca>Patinha de Natal</span></a>
+      <a class="linklike" data-whatsapp="Olá! Preciso de ajuda com o meu pedido." hidden target="_blank" rel="noopener">Ajuda</a>
+    </div>
+  </header>
+
+  <main class="narrow app" style="padding-bottom:60px">
+
+    <!-- carregando -->
+    <section id="view-loading" class="center">
+      <div class="spinner dark"></div>
+      <p class="muted" style="margin-top:16px">Abrindo seu pedido…</p>
+    </section>
+
+    <!-- sem pedido neste aparelho -->
+    <section id="view-login" hidden>
+      <form class="card" id="login-form" novalidate>
+        <h2>Entrar no meu pedido</h2>
+        <p class="muted">Informe os mesmos dados que você usou na compra.</p>
+        <div class="alert error" id="login-error" hidden role="alert"></div>
+        <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" required></label>
+        <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required></label>
+        <button class="btn green block" type="submit">Entrar</button>
+        <p class="center" style="margin:18px 0 0">Ainda não comprou? <a href="index.html#comprar">Peça o seu aqui</a></p>
+      </form>
+    </section>
+
+    <!-- pagamento pendente -->
+    <section id="view-pending" class="center" hidden>
+      <div class="card">
+        <div class="spinner dark"></div>
+        <h2 style="margin-top:18px">Aguardando o pagamento</h2>
+        <p class="muted">Assim que o pagamento for confirmado, esta página libera sozinha. Com Pix leva poucos segundos.</p>
+        <a class="btn ghost block" href="index.html#comprar">Ainda não paguei</a>
+      </div>
+    </section>
+
+    <!-- passo 1 e 2: foto e artes -->
+    <section id="view-studio" hidden>
+      <ol class="progress"><li class="on">1. Foto</li><li id="prog-2">2. Escolher</li><li>3. Endereço</li></ol>
+      <div class="card">
+        <h2 class="center" id="studio-title">Envie a foto do seu pet</h2>
+        <p class="paws" id="paws" aria-live="polite"></p>
+        <div class="alert error" id="studio-error" hidden role="alert"></div>
+
+        <div id="arts-block" hidden>
+          <div class="arts" id="arts"></div>
+        </div>
+
+        <!-- escolher foto -->
+        <div id="pick-block">
+          <label class="drop" id="drop">
+            <span class="icon">📸</span>
+            <span id="drop-label">Toque para escolher a foto</span>
+            <small>da galeria ou da câmera</small>
+            <input type="file" id="file" accept="image/*" hidden>
+          </label>
+          <ul class="tips">
+            <li><span class="icon">🐶</span>Rosto de frente</li>
+            <li><span class="icon">☀️</span>Boa luz</li>
+            <li><span class="icon">1️⃣</span>Só um pet</li>
+          </ul>
+          <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="cancel-pick" hidden>← Voltar para as artes</button></p>
+        </div>
+
+        <!-- foto escolhida / criando -->
+        <div id="preview-block" hidden>
+          <div class="preview">
+            <img id="preview-img" alt="Foto escolhida do seu pet">
+            <div class="working" id="working" hidden>
+              <div class="spinner"></div>
+              <div>Desenhando seu pet…</div>
+              <div class="bar"><i id="bar"></i></div>
+              <small style="font:600 1rem var(--font-body)">Leva cerca de 1 minuto. Não feche esta página.</small>
+            </div>
+          </div>
+          <div id="preview-actions" class="again">
+            <button class="btn block" id="create" type="button">✨ Criar minha arte</button>
+            <button class="btn ghost block sm" id="change" type="button">Trocar a foto</button>
+          </div>
+        </div>
+
+        <!-- depois de ter artes -->
+        <div id="next-block" hidden>
+          <button class="btn green block" id="go-address" type="button" disabled>Escolha uma arte acima</button>
+          <div class="again" id="again-block">
+            <p class="center muted" style="margin:20px 0 0" id="again-text"></p>
+            <button class="btn ghost block sm" id="again-same" type="button">Tentar de novo com a mesma foto</button>
+            <button class="btn ghost block sm" id="again-other" type="button">Tentar com outra foto</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- passo 3: endereço -->
+    <section id="view-address" hidden>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li class="on">3. Endereço</li></ol>
+      <form class="card" id="address-form" novalidate>
+        <div class="center"><div class="ornament sm" style="margin:14px auto 10px"><img id="address-art" alt="Arte escolhida"></div></div>
+        <h2 class="center">Para onde enviamos?</h2>
+        <div class="alert error" id="address-error" hidden role="alert"></div>
+        <label class="field"><span>Nome do pet <small>(opcional)</small></span><input name="pet_name" maxlength="60" placeholder="Ex.: Mel"></label>
+        <label class="field"><span>Quem vai receber</span><input name="recipient" autocomplete="name" required maxlength="120"></label>
+        <label class="field"><span>CEP</span><input name="cep" inputmode="numeric" autocomplete="postal-code" required placeholder="00000-000"></label>
+        <p class="small muted" id="cep-status" style="margin:-10px 0 14px" aria-live="polite"></p>
+        <label class="field"><span>Rua</span><input name="street" autocomplete="address-line1" required maxlength="160"></label>
+        <div class="row-num">
+          <label class="field"><span>Número</span><input name="number" inputmode="numeric" required maxlength="20"></label>
+          <label class="field"><span>Complemento <small>(opcional)</small></span><input name="complement" maxlength="80" placeholder="Apto, bloco…"></label>
+        </div>
+        <label class="field"><span>Bairro</span><input name="district" required maxlength="100"></label>
+        <div class="row2">
+          <label class="field"><span>Cidade</span><input name="city" required maxlength="100"></label>
+          <label class="field"><span>Estado</span>
+            <select name="state" required>
+              <option value="">Escolha</option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option>
+            </select></label>
+        </div>
+        <button class="btn block" type="submit" id="confirm-btn">🎄 Finalizar meu pedido</button>
+        <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="back-arts">← Voltar para as artes</button></p>
+      </form>
+    </section>
+
+    <!-- pedido concluído -->
+    <section id="view-done" hidden>
+      <div class="card center">
+        <div class="ornament sm" style="margin:14px auto 14px"><img id="done-art" alt="Arte do seu enfeite"></div>
+        <h2>Pedido confirmado! 🎉</h2>
+        <p>Pedido <strong id="done-code"></strong><span id="done-pet"></span></p>
+        <ul class="timeline" id="timeline"></ul>
+        <div class="summary" id="done-address"></div>
+        <p style="margin:18px 0 0"><button class="linklike" type="button" id="edit-address" hidden>Corrigir o endereço</button></p>
+        <a class="btn green block" style="margin-top:14px" data-whatsapp="Olá! Quero falar sobre o meu pedido." hidden target="_blank" rel="noopener">Falar no WhatsApp</a>
+        <p class="small muted" style="margin:18px 0 0">Guarde esta página: é por aqui que você acompanha o envio.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/criar.js"></script>
+</body>
+</html>
