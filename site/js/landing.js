@@ -22,6 +22,12 @@
     state.price = c.price_cents;
     state.calcShipping = c.shipping_mode === "calculado";
     renderDeadlines(c.regions || []);
+    state.extraPrices = c.extra_prices || [];
+    renderExtras();
+    if (c.pickup) {
+      $("#delivery").hidden = false;
+      $("#pickup-label").textContent = "Sem frete · " + c.pickup.name + ", " + c.pickup.address;
+    }
     document.querySelectorAll("[data-frete]").forEach((el) => { el.textContent = state.calcShipping ? "+ frete para o seu CEP" : "frete incluso"; });
   }).catch(() => { /* mantém os valores padrão do HTML */ });
 
@@ -45,32 +51,77 @@
     $("#deadlines").hidden = !rows.length;
   }
 
+  // ───────── valor do pedido: enfeite + adicionais + frete ─────────
+
+  const state = { price: 4990, calcShipping: false, quotedCep: "", cepError: "", extras: 0, extraPrices: [], shipping: 0, days: null };
+  const delivery = () => (form.querySelector("input[name=delivery]:checked") || {}).value || "correios";
+  const extrasCents = () => state.extraPrices.slice(0, state.extras).reduce((a, b) => a + b, 0);
+
+  function updateTotals() {
+    const pickup = delivery() === "retirada";
+    const ship = pickup ? 0 : state.shipping;
+    const total = state.price + extrasCents() + ship;
+    const showShip = !pickup && state.calcShipping && state.quotedCep;
+    $("#row-extras").hidden = !state.extras;
+    $("#quote-extras").textContent = PN.money(extrasCents());
+    $("#extras-label").textContent = state.extras === 1 ? "1 enfeite adicional" : state.extras + " enfeites adicionais";
+    $("#row-ship").hidden = !showShip;
+    $("#quote-label").textContent = state.days ? "· cerca de " + state.days + " dias úteis" : "";
+    $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis";
+    $("#quote-total").textContent = PN.money(total);
+    $("#totals").hidden = !(state.extras || showShip);
+    $("#btn-total").textContent = PN.money(total);
+  }
+
+  // Enfeites adicionais (outro pet ou mais um igual), com preço menor a cada um.
+  function renderExtras() {
+    const box = $("#extras");
+    if (!state.extraPrices.length) { box.hidden = true; return; }
+    box.hidden = false;
+    $("#extras-count").textContent = state.extras;
+    $("#extras-minus").disabled = state.extras === 0;
+    $("#extras-plus").disabled = state.extras >= state.extraPrices.length;
+    $("#extras-prices").textContent = state.extraPrices.map((c, i) => `${i + 2}º enfeite ${PN.money(c)}`).join("  ·  ");
+    updateTotals();
+  }
+  $("#extras-minus").addEventListener("click", () => { state.extras = Math.max(0, state.extras - 1); renderExtras(); requote(); });
+  $("#extras-plus").addEventListener("click", () => { state.extras = Math.min(state.extraPrices.length, state.extras + 1); renderExtras(); requote(); });
+
+  // Entrega pelos Correios ou retirada no ponto.
+  form.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => {
+    const pickup = delivery() === "retirada";
+    $("#cep-field").hidden = pickup;
+    $("#quote-status").hidden = pickup;
+    updateTotals();
+    if (!pickup) requote();
+  }));
+
   // Frete e região: conferidos no servidor assim que o CEP fica completo.
-  const state = { price: 4990, calcShipping: false, quotedCep: "", cepError: "" };
-  form.cep.addEventListener("input", async (e) => {
-    e.target.value = PN.maskCep(e.target.value);
-    const cep = e.target.value.replace(/\D/g, "");
+  let quoteSeq = 0;
+  async function requote() {
+    const cep = form.cep.value.replace(/\D/g, "");
     const status = $("#quote-status");
-    if (cep.length !== 8) { $("#totals").hidden = true; status.textContent = ""; state.quotedCep = ""; state.cepError = ""; return; }
+    if (delivery() === "retirada") return;
+    if (cep.length !== 8) { status.textContent = ""; state.quotedCep = ""; state.cepError = ""; state.shipping = 0; updateTotals(); return; }
+    const seq = ++quoteSeq;
     status.textContent = state.calcShipping ? "Calculando o frete…" : "Conferindo o CEP…";
     try {
-      const q = await PN.api("quote", { cep });
-      if (form.cep.value.replace(/\D/g, "") !== cep) return;
+      const q = await PN.api("quote", { cep, extras: state.extras });
+      if (seq !== quoteSeq) return;
       state.quotedCep = cep;
       state.cepError = "";
+      state.shipping = q.shipping_cents || 0;
+      state.days = q.days;
       status.textContent = state.calcShipping ? "" : "✓ Entregamos no seu endereço. Frete incluso.";
-      if (!state.calcShipping) return;
-      $("#quote-label").textContent = q.days ? "· cerca de " + q.days + " dias úteis" : "";
-      $("#quote-shipping").textContent = q.shipping_cents ? PN.money(q.shipping_cents) : "Grátis";
-      $("#quote-total").textContent = PN.money(q.total_cents);
-      $("#btn-total").textContent = PN.money(q.total_cents);
-      $("#totals").hidden = false;
     } catch (err) {
-      $("#totals").hidden = true;
+      if (seq !== quoteSeq) return;
       state.cepError = err.message;
+      state.shipping = 0;
       status.textContent = err.message;
     }
-  });
+    updateTotals();
+  }
+  form.cep.addEventListener("input", (e) => { e.target.value = PN.maskCep(e.target.value); requote(); });
 
   // Quem já tem pedido neste aparelho vê um atalho no lugar de "Já comprei".
   const saved = PN.getToken();
@@ -94,18 +145,22 @@
       email: form.email.value.trim(),
       whatsapp: form.whatsapp.value,
       cep: form.cep.value,
+      delivery: delivery(),
+      extras: state.extras,
       site_url: location.href.split(/[?#]/)[0],
     };
     if (data.name.length < 3) { form.name.focus(); return showError(errorBox, "Digite seu nome completo."); }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) { form.email.focus(); return showError(errorBox, "Confira seu e-mail."); }
     if (data.whatsapp.replace(/\D/g, "").length < 10) { form.whatsapp.focus(); return showError(errorBox, "Confira seu WhatsApp com DDD."); }
 
-    if (data.cep.replace(/\D/g, "").length !== 8) { form.cep.focus(); return showError(errorBox, "Digite o CEP de entrega."); }
-    if (state.cepError) { form.cep.focus(); return showError(errorBox, state.cepError); }
+    if (data.delivery !== "retirada") {
+      if (data.cep.replace(/\D/g, "").length !== 8) { form.cep.focus(); return showError(errorBox, "Digite o CEP de entrega."); }
+      if (state.cepError) { form.cep.focus(); return showError(errorBox, state.cepError); }
+    }
 
     btn.disabled = true;
     btn.textContent = "Abrindo o pagamento…";
-    PN.track("InitiateCheckout", { value: state.price / 100, currency: "BRL" });
+    PN.track("InitiateCheckout", { value: (state.price + extrasCents()) / 100, currency: "BRL" });
     try {
       const out = await PN.api("checkout", data);
       PN.setToken(out.token);

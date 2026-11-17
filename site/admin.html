@@ -59,6 +59,13 @@
     .swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 16px; }
     .swatches span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border: 1px solid var(--line); border-radius: 99px; font-size: 0.85rem; font-weight: 700; }
     .swatches i { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
+    .badge.retirada { background: var(--gold-soft); color: #6a4b0b; }
+    .badge.extras { background: #e3e8f7; color: #253a7a; }
+    .piece { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); max-width: 230px; }
+    .piece-head { margin: 0 0 6px; font-size: 0.92rem; }
+    .piece-row { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 6px; align-items: center; }
+    .piece-row img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); }
+    .piece-row .btn.sm { min-height: 40px; padding: 6px 8px; font-size: 0.85rem; }
     .layers { font-size: 0.85rem; color: var(--muted); margin: 4px 0 0; line-height: 1.45; }
     @media (min-width: 860px) {
       .order { grid-template-columns: 240px 1fr 300px; }
@@ -108,6 +115,22 @@
             <select name="max_colors"><option value="2">2 cores</option><option value="3">3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></label>
           <label class="switch"><input type="checkbox" name="test_mode"> Modo de teste <small class="muted">(pedidos sem cobrança)</small></label>
           <p class="small muted" style="margin:8px 0 0">Com o modo de teste ligado, qualquer pessoa cria pedidos grátis. Use só para testar e desligue antes de anunciar.</p>
+        </div>
+        <div class="card">
+          <h3>Enfeites adicionais</h3>
+          <p class="small muted">O cliente pode pedir até 3 a mais no mesmo pedido (outro pet ou mais um igual). Deixe em branco para oferecer menos.</p>
+          <div class="row3">
+            <label class="field"><span>2º enfeite (R$)</span><input name="extra_0" inputmode="decimal"></label>
+            <label class="field"><span>3º enfeite (R$)</span><input name="extra_1" inputmode="decimal"></label>
+            <label class="field"><span>4º enfeite (R$)</span><input name="extra_2" inputmode="decimal"></label>
+          </div>
+          <label class="field"><span>Tentativas de arte por pet adicional</span><input name="extra_credits" type="number" min="1" max="10"></label>
+        </div>
+        <div class="card">
+          <h3>Retirada</h3>
+          <label class="switch"><input type="checkbox" name="pickup_enabled"> Oferecer retirada (sem frete)</label>
+          <label class="field" style="margin-top:12px"><span>Local</span><input name="pickup_name" maxlength="80"></label>
+          <label class="field"><span>Endereço</span><input name="pickup_address" maxlength="200"></label>
         </div>
         <div class="card">
           <h3>Mercado Pago <span class="state" id="mp-state"></span></h3>

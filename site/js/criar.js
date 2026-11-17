@@ -1,7 +1,7 @@
 // Estúdio do cliente: foto → artes → escolha → endereço → acompanhamento.
 (function () {
   const $ = (s) => document.querySelector(s);
-  const views = ["loading", "login", "pending", "studio", "address", "done"];
+  const views = ["loading", "login", "pending", "studio", "extras", "address", "done"];
 
   const state = {
     token: PN.getToken(),
@@ -9,7 +9,9 @@
     photo: null,        // Blob já reduzido, pronto para enviar
     photoUrl: null,
     mode: "idle",       // idle | pick | preview | working
-    step: "studio",     // studio | address
+    step: "studio",     // studio | extras | address
+    item: 0,            // enfeite em que a pessoa está trabalhando (0 = principal, 1..3 = adicionais)
+    nameViewer: null,
     species: null,      // gato | cachorro | ave | roedor
     viewer: null,
     viewerFor: null,
@@ -30,9 +32,30 @@
     if (msg) box.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
-  const doneArts = () => state.order.generations.filter((g) => g.status === "done" && g.url);
+  // ───────── enfeites do pedido (principal + adicionais) ─────────
+  const itemsOf = (o) => o.items || [];
+  const extraOf = (i) => itemsOf(state.order).find((it) => it.position === i);
+  // tentativas e arte escolhida do enfeite em que a pessoa está
+  function cur() {
+    const o = state.order;
+    if (state.item === 0) return { credits_total: o.credits_total, credits_left: o.credits_left, chosen_generation: o.chosen_generation };
+    const it = extraOf(state.item) || { credits_total: 0, credits_left: 0, chosen_generation: null };
+    return it;
+  }
+  // arte usada em cada enfeite ("mais um igual" usa a do principal)
+  function chosenIdOf(i) {
+    const o = state.order;
+    if (i === 0) return o.chosen_generation;
+    const it = extraOf(i);
+    return it && it.kind === "copia" ? o.chosen_generation : it && it.chosen_generation;
+  }
+  const genById = (id) => state.order.generations.find((g) => g.id === id);
+  const pieces = () => [0, ...itemsOf(state.order).map((it) => it.position)];
+  const pendingExtras = () => itemsOf(state.order).filter((it) => !it.kind || (it.kind === "novo" && !it.chosen_generation));
+
+  const doneArts = () => state.order.generations.filter((g) => g.status === "done" && g.url && (g.item || 0) === state.item);
   const processing = () => state.order.generations.find((g) => g.status === "processing");
-  const chosenArt = () => state.order.generations.find((g) => g.id === state.order.chosen_generation);
+  const chosenArt = () => genById(cur().chosen_generation);
 
   // ───────── carregar pedido ─────────
 
@@ -67,7 +90,8 @@
     const arts = o.generations.filter((g) => g.status === "done" && g.share_url);
     if (arts.length) {
       lines.push("", arts.length === 1 ? "Arte que eu criei:" : "Artes que eu criei:");
-      arts.forEach((g, i) => lines.push((i + 1) + ") " + g.share_url + (g.id === o.chosen_generation ? "  (escolhida)" : "")));
+      const chosen = pieces().map(chosenIdOf);
+      arts.forEach((g, i) => lines.push((i + 1) + ") " + g.share_url + (chosen.includes(g.id) ? "  (escolhida)" : "")));
     }
     const link = PN.whatsappLink(lines.join("\n"));
     document.querySelectorAll("[data-support]").forEach((el) => {
@@ -78,22 +102,29 @@
 
   // Resumo do pedido pronto para mandar no WhatsApp da loja (o dono controla tudo por lá).
   function summaryText(o) {
-    const art = o.generations.find((g) => g.id === o.chosen_generation);
     const a = o.address || {};
-    const lines = [
-      "Olá! Acabei de fazer o pedido " + o.code + " 🎄",
-      "",
-      "Pet: " + (o.pet_name || "(sem nome no verso)"),
-      art && art.share_url ? "Arte escolhida: " + art.share_url : "",
-      "",
-      "Entrega para: " + (a.recipient || ""),
-      [a.street && a.street + ", " + a.number, a.complement].filter(Boolean).join(" — "),
-      [a.district, a.city && a.city + "/" + a.state].filter(Boolean).join(" · "),
-      a.cep ? "CEP " + PN.maskCep(a.cep) : "",
-      o.customer_notes ? "\nObservações: " + o.customer_notes : "",
-      o.amount_cents ? "\nValor pago: " + PN.money(o.amount_cents) : "",
-    ];
-    return lines.filter((l, i, arr) => l !== "" || (arr[i - 1] !== "" && i > 0)).join("\n").replace(/\n{3,}/g, "\n\n");
+    const pickup = o.delivery_method === "retirada";
+    const lines = ["Olá! Acabei de fazer o pedido " + o.code + " 🎄", ""];
+    pieces().forEach((i) => {
+      const art = genById(chosenIdOf(i));
+      const name = i === 0 ? o.pet_name : (extraOf(i) || {}).pet_name;
+      const tag = pieces().length > 1 ? `Enfeite ${i + 1}` + (i > 0 && (extraOf(i) || {}).kind === "copia" ? " (igual ao 1)" : "") + ": " : "";
+      lines.push(tag + "Pet: " + (name || "(sem nome no verso)"));
+      if (art && art.share_url) lines.push("Arte: " + art.share_url);
+      lines.push("");
+    });
+    if (pickup) {
+      const p = (PN.publicConfig && PN.publicConfig.pickup) || {};
+      lines.push("Retirada: " + [p.name, p.address].filter(Boolean).join(", "), "Quem retira: " + (a.recipient || o.name || ""));
+    } else {
+      lines.push("Entrega para: " + (a.recipient || ""),
+        [a.street && a.street + ", " + a.number, a.complement].filter(Boolean).join(" — "),
+        [a.district, a.city && a.city + "/" + a.state].filter(Boolean).join(" · "),
+        a.cep ? "CEP " + PN.maskCep(a.cep) : "");
+    }
+    if (o.customer_notes) lines.push("", "Observações: " + o.customer_notes);
+    if (o.amount_cents) lines.push("", "Valor pago: " + PN.money(o.amount_cents));
+    return lines.filter((l) => l !== undefined).join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
   function updateSummary() {
@@ -143,6 +174,7 @@
     trackPurchase(o);
     if (o.confirmed && state.step !== "address") return renderDone();
     if (state.step === "address") return renderAddress();
+    if (state.step === "extras") return renderExtras();
     renderStudio();
   }
 
@@ -163,6 +195,8 @@
     const busy = processing();
     show("studio");
 
+    const c = cur();
+    let autoChoose = null;   // escolhe a primeira arte sozinho, depois de terminar de desenhar a tela
     // Geração que estávamos acompanhando terminou?
     if (state.watching && !busy) {
       const g = o.generations.find((x) => x.id === state.watching);
@@ -174,7 +208,7 @@
       } else {
         state.mode = "idle";
         setError("#studio-error", "");
-        if (arts.length === 1 && !o.chosen_generation) choose(arts[0].id);
+        if (arts.length === 1 && !c.chosen_generation) autoChoose = arts[0].id;
       }
       maybeShowTips();
     }
@@ -184,18 +218,21 @@
     // patinhas = tentativas
     const paws = $("#paws");
     paws.innerHTML = "";
-    for (let i = 0; i < o.credits_total; i++) {
+    for (let i = 0; i < c.credits_total; i++) {
       const s = document.createElement("span");
-      s.className = "paw" + (i < o.credits_total - o.credits_left ? " used" : "");
+      s.className = "paw" + (i < c.credits_total - c.credits_left ? " used" : "");
       s.textContent = "🐾";
       paws.appendChild(s);
     }
     const label = document.createElement("span");
-    label.textContent = o.credits_left === 0 ? "Você usou todas as tentativas"
-      : o.credits_left === 1 ? "Resta 1 tentativa" : "Você tem " + o.credits_left + " tentativas";
+    label.textContent = c.credits_left === 0 ? "Você usou todas as tentativas"
+      : c.credits_left === 1 ? "Resta 1 tentativa" : "Você tem " + c.credits_left + " tentativas";
     paws.appendChild(label);
 
-    $("#studio-title").textContent = arts.length ? "Escolha a arte preferida" : "Envie a foto do seu pet";
+    const piece = state.item ? `Enfeite ${state.item + 1}: ` : "";
+    $("#studio-title").textContent = piece + (arts.length ? "escolha a arte preferida" : state.item ? "envie a foto do outro pet" : "Envie a foto do seu pet");
+    if (!state.item) $("#studio-title").textContent = arts.length ? "Escolha a arte preferida" : "Envie a foto do seu pet";
+    $("#back-extras").hidden = !state.item;
     $("#prog-2").classList.toggle("on", arts.length > 0);
 
     // artes
@@ -204,7 +241,7 @@
     grid.innerHTML = "";
     arts.forEach((g, i) => {
       const card = document.createElement("div");
-      const isChosen = g.id === o.chosen_generation;
+      const isChosen = g.id === c.chosen_generation;
       card.className = "art-card" + (isChosen ? " chosen" : "");
       const img = document.createElement("img");
       img.src = g.url;
@@ -245,28 +282,166 @@
     $("#drop-label").textContent = state.species ? "Toque para escolher a foto" : "Primeiro, escolha o tipo de pet acima";
 
     const go = $("#go-address");
-    go.disabled = !o.chosen_generation;
-    go.textContent = o.chosen_generation ? "Continuar com esta arte →" : "Escolha uma arte acima";
+    go.disabled = !c.chosen_generation;
+    go.textContent = c.chosen_generation ? "Continuar com esta arte →" : "Escolha uma arte acima";
 
     $("#again-block").hidden = false;
-    $("#again-same").hidden = o.credits_left === 0 || !state.photo;
-    $("#again-other").hidden = o.credits_left === 0;
-    $("#again-text").textContent = o.credits_left === 0
+    $("#again-same").hidden = c.credits_left === 0 || !state.photo;
+    $("#again-other").hidden = c.credits_left === 0;
+    $("#again-text").textContent = c.credits_left === 0
       ? "Você já criou todas as suas artes. Escolha a preferida para continuar."
       : "Quer ver outra opção?";
+    if (autoChoose) choose(autoChoose);
+  }
+
+  // Enfeites adicionais: para cada um, "outro pet" (cria a arte) ou "mais um igual".
+  function renderExtras() {
+    const o = state.order;
+    show("extras");
+    const list = $("#extras-list");
+    list.replaceChildren(...itemsOf(o).map((it) => {
+      const n = it.position + 1;
+      const card = document.createElement("div");
+      card.className = "extra-card" + (it.kind && (it.kind === "copia" || it.chosen_generation) ? " ready" : "");
+      const art = genById(chosenIdOf(it.position));
+      const thumb = document.createElement("div");
+      thumb.className = "extra-thumb";
+      if (art && art.url) { const im = document.createElement("img"); im.src = art.url; im.alt = "Arte do enfeite " + n; thumb.appendChild(im); }
+      else thumb.textContent = "🐾";
+      const body = document.createElement("div");
+      const h = document.createElement("h3");
+      h.textContent = "Enfeite " + n;
+      const p = document.createElement("p");
+      p.className = "small muted";
+      p.textContent = it.kind === "copia" ? "Mais um igual ao primeiro (pode ter outro nome no verso)."
+        : it.kind === "novo" ? (it.chosen_generation ? "Outro pet — arte escolhida ✓" : "Outro pet — falta criar a arte.")
+        : "É de outro pet ou mais um igual ao primeiro?";
+      const row = document.createElement("div");
+      row.className = "extra-actions";
+      const bNew = document.createElement("button");
+      bNew.type = "button";
+      bNew.className = "btn sm " + (it.kind === "novo" ? "green" : "ghost");
+      bNew.textContent = it.kind === "novo" ? (it.chosen_generation ? "Trocar a arte" : "Criar a arte →") : "🐾 Outro pet";
+      bNew.addEventListener("click", () => setKind(it.position, "novo", true));
+      const bCopy = document.createElement("button");
+      bCopy.type = "button";
+      bCopy.className = "btn sm " + (it.kind === "copia" ? "green" : "ghost");
+      bCopy.textContent = it.kind === "copia" ? "✓ Mais um igual" : "Mais um igual";
+      bCopy.addEventListener("click", () => setKind(it.position, "copia", false));
+      row.append(bNew, bCopy);
+      body.append(h, p, row);
+      card.append(thumb, body);
+      return card;
+    }));
+    const left = pendingExtras().length;
+    const next = $("#extras-next");
+    next.disabled = left > 0;
+    next.textContent = left ? `Falta decidir ${left === 1 ? "1 enfeite" : left + " enfeites"}` : "Continuar →";
+    window.scrollTo(0, 0);
+  }
+
+  async function setKind(pos, kind, openStudio) {
+    setError("#extras-error", "");
+    const it = extraOf(pos);
+    try {
+      if (!it || it.kind !== kind) {
+        const out = await PN.api("item-kind", { token: state.token, item: pos, kind });
+        state.order = out.order;
+      }
+      if (openStudio) {
+        state.item = pos;
+        state.step = "studio";
+        state.mode = "idle";
+        state.photo = null;
+        render();
+        window.scrollTo(0, 0);
+      } else renderExtras();
+    } catch (err) {
+      setError("#extras-error", err.message);
+    }
+  }
+
+  // Depois de escolher a arte: adicionais pendentes → tela dos adicionais; senão → endereço.
+  function nextStep() {
+    state.step = itemsOf(state.order).length ? "extras" : "address";
+    render();
+  }
+
+  // Nomes no verso: um campo por enfeite, com a prévia 3D mostrando o verso.
+  function renderNames() {
+    const box = $("#names");
+    const o = state.order;
+    if (box.dataset.for === o.code + pieces().length) return;
+    box.dataset.for = o.code + pieces().length;
+    const many = pieces().length > 1;
+    box.replaceChildren(...pieces().map((i) => {
+      const label = document.createElement("label");
+      label.className = "field";
+      const span = document.createElement("span");
+      span.innerHTML = (many ? `Nome no verso do enfeite ${i + 1}` : "Nome do pet") + " <small>(opcional, até 16 letras)</small>";
+      const input = document.createElement("input");
+      input.maxLength = 16;
+      input.dataset.item = i;
+      input.placeholder = "Ex.: Mel";
+      input.value = (i === 0 ? o.pet_name : (extraOf(i) || {}).pet_name) || "";
+      input.addEventListener("input", () => previewName(i, input.value));
+      input.addEventListener("focus", () => previewName(i, input.value));
+      label.append(span, input);
+      return label;
+    }));
+    previewName(0, box.querySelector("input").value);
+  }
+
+  let nameTimer = null, nameSeq = 0;
+  function previewName(i, name) {
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(async () => {
+      const art = genById(chosenIdOf(i));
+      if (!art || !window.PN3D) return;
+      const seq = ++nameSeq;
+      const box = $("#name-viewer");
+      $("#name-caption").textContent = name.trim()
+        ? `Verso do enfeite${pieces().length > 1 ? " " + (i + 1) : ""}: "${name.trim()}" gravado. Arraste para ver a frente.`
+        : "Verso do enfeite: digite o nome para ver como fica gravado.";
+      try {
+        const c = (await PN.ready) || {};
+        const model = await PN3D.build(art.url, {
+          ...(c.model || {}), filaments: c.filaments || [], petName: name.trim(),
+          brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
+        });
+        if (seq !== nameSeq) return;
+        if (state.nameViewer) state.nameViewer.destroy();
+        state.nameViewer = await PN3D.view(box, model, { spin: true, hold: true, pose: { x: 0.05, y: Math.PI } });
+      } catch (err) {
+        console.warn("prévia do nome indisponível", err);
+        box.hidden = true;
+      }
+    }, 450);
   }
 
   function renderAddress() {
     const o = state.order;
+    state.item = 0;
     const art = chosenArt();
     if (!art) { state.step = "studio"; return renderStudio(); }
+    if (pendingExtras().length) { state.step = "extras"; return renderExtras(); }
     show("address");
-    $("#address-art").src = art.url;
+    const pickup = o.delivery_method === "retirada";
     const f = $("#address-form");
+    $("#address-title").textContent = pickup ? "Quem vai retirar?" : "Para onde enviamos?";
+    $("#recipient-label").textContent = pickup ? "Nome de quem vai retirar" : "Quem vai receber";
+    $("#addr-fields").hidden = pickup;
+    $("#addr-fields").querySelectorAll("input, select").forEach((el) => { el.disabled = pickup; });
+    const pk = (PN.publicConfig && PN.publicConfig.pickup) || null;
+    $("#pickup-box").hidden = !pickup;
+    if (pickup && pk) {
+      $("#pickup-place").textContent = pk.name + " — " + pk.address;
+      $("#pickup-map").href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(pk.name + ", " + pk.address);
+    }
+    renderNames();
     if (!f.dataset.filled) {
       f.dataset.filled = "1";
       const a = o.address || {};
-      f.pet_name.value = o.pet_name || "";
       f.customer_notes.value = o.customer_notes || "";
       f.recipient.value = a.recipient || o.name || "";
       f.cep.value = a.cep ? PN.maskCep(a.cep) : "";
@@ -278,7 +453,7 @@
       f.state.value = a.state || "";
     }
     // Frete cobrado por CEP: a entrega é nesse CEP.
-    if (o.locked_cep) {
+    if (!pickup && o.locked_cep) {
       const first = !f.cep.readOnly;
       f.cep.value = PN.maskCep(o.locked_cep);
       f.cep.readOnly = true;
@@ -295,14 +470,18 @@
     const art = chosenArt();
     if (art) $("#done-art").src = art.url;
     $("#done-code").textContent = o.code;
-    $("#done-pet").textContent = o.pet_name ? " · enfeite de " + o.pet_name : "";
+    const names = [o.pet_name, ...itemsOf(o).map((it) => it.pet_name)].filter(Boolean);
+    $("#done-pet").textContent = (pieces().length > 1 ? ` · ${pieces().length} enfeites` : "") + (names.length ? " · " + names.join(", ") : "");
+    const pickup = o.delivery_method === "retirada";
 
     const st = o.production_status;
     const steps = [
       ["Pagamento confirmado", true],
       ["Arte escolhida", true],
       ["Em produção", ["producao", "enviado", "entregue"].includes(st)],
-      [st === "entregue" ? "Entregue" : "Enviado" + (o.tracking_code ? " — rastreio: " + o.tracking_code : ""), ["enviado", "entregue"].includes(st)],
+      pickup
+        ? [st === "entregue" ? "Retirado" : "Pronto para retirar", ["enviado", "entregue"].includes(st)]
+        : [st === "entregue" ? "Entregue" : "Enviado" + (o.tracking_code ? " — rastreio: " + o.tracking_code : ""), ["enviado", "entregue"].includes(st)],
     ];
     const tl = $("#timeline");
     tl.innerHTML = "";
@@ -320,11 +499,20 @@
     const box = $("#done-address");
     box.innerHTML = "";
     const title = document.createElement("strong");
-    title.textContent = "Entrega para";
-    box.append(title, document.createElement("br"),
-      document.createTextNode(a.recipient), document.createElement("br"),
-      document.createTextNode(a.street + ", " + a.number + (a.complement ? " — " + a.complement : "")), document.createElement("br"),
-      document.createTextNode(a.district + " · " + a.city + "/" + a.state + " · CEP " + PN.maskCep(a.cep)));
+    const br = () => document.createElement("br");
+    const txt = (t) => document.createTextNode(t);
+    if (pickup) {
+      const pk = (PN.publicConfig && PN.publicConfig.pickup) || {};
+      title.textContent = "Retirada";
+      box.append(title, br(), txt(pk.name || ""), br(), txt(pk.address || ""), br(), txt("Quem retira: " + (a.recipient || "")),
+        br(), txt("Avisamos pelo WhatsApp quando estiver pronto."));
+    } else {
+      title.textContent = "Entrega para";
+      box.append(title, br(), txt(a.recipient), br(),
+        txt(a.street + ", " + a.number + (a.complement ? " — " + a.complement : "")), br(),
+        txt(a.district + " · " + a.city + "/" + a.state + " · CEP " + PN.maskCep(a.cep)));
+    }
+    $("#edit-address").textContent = pickup ? "Corrigir os dados" : "Corrigir o endereço";
     PN.ready.then(updateSummary);
     const notes = $("#done-notes");
     notes.hidden = !o.customer_notes;
@@ -344,7 +532,7 @@
 
   const tips = $("#tips");
   function openTips() {
-    const left = state.order ? state.order.credits_left : 0;
+    const left = state.order ? cur().credits_left : 0;
     $("#tips-left").textContent = left > 0
       ? (left === 1 ? "Você ainda tem 1 tentativa." : "Você ainda tem " + left + " tentativas.") + " Se a arte não ficou parecida, tente com uma foto assim:"
       : "Para a arte ficar parecida com o seu pet, a foto ideal é assim:";
@@ -353,11 +541,12 @@
   // Aparece sozinho, uma única vez, quando o cliente já gastou 2 artes e ainda tem outras.
   function maybeShowTips() {
     const o = state.order;
-    const used = o.credits_total - o.credits_left;
-    const key = "pn_tips_" + o.code;
+    const c = cur();
+    const used = c.credits_total - c.credits_left;
+    const key = "pn_tips_" + o.code + "_" + state.item;
     let seen = false;
     try { seen = !!localStorage.getItem(key); } catch (_) { /* modo privado */ }
-    if (used < 2 || o.credits_left === 0 || seen) return;
+    if (used < 2 || c.credits_left === 0 || seen) return;
     try { localStorage.setItem(key, "1"); } catch (_) { /* modo privado */ }
     openTips();
   }
@@ -367,15 +556,17 @@
   // ───────── ações ─────────
 
   async function choose(id) {
-    if (state.order.chosen_generation === id) return;
-    const before = state.order.chosen_generation;
-    state.order.chosen_generation = id;
+    const item = state.item;
+    const target = item === 0 ? state.order : extraOf(item);
+    if (!target || target.chosen_generation === id) return;
+    const before = target.chosen_generation;
+    target.chosen_generation = id;
     renderStudio();
     updateSupport();
     try {
-      await PN.api("choose", { token: state.token, generation_id: id });
+      await PN.api("choose", { token: state.token, generation_id: id, item });
     } catch (err) {
-      state.order.chosen_generation = before;
+      target.chosen_generation = before;
       renderStudio();
       setError("#studio-error", err.message);
     }
@@ -436,7 +627,7 @@
         band: c.model && c.model.band,
         filaments: c.filaments || [],
         brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
-        petName: state.order.pet_name || "",
+        petName: (state.item === 0 ? state.order.pet_name : (extraOf(state.item) || {}).pet_name) || "",
       });
       if (state.viewerFor !== art.id) return;
       state.viewer = await PN3D.view(box, model, { spin: true });
@@ -464,7 +655,7 @@
     renderStudio();
     startBar(true);
     try {
-      const out = await PN.upload(state.token, state.photo, state.species);
+      const out = await PN.upload(state.token, state.photo, state.species, state.item);
       state.watching = out.generation_id;
       state.uploading = false;
       schedule(2500);
@@ -517,8 +708,14 @@
   $("#cancel-pick").addEventListener("click", () => { state.mode = "idle"; renderStudio(); });
   $("#again-same").addEventListener("click", create);
   $("#again-other").addEventListener("click", () => { state.mode = "pick"; renderStudio(); $("#pick-block").scrollIntoView({ behavior: "smooth", block: "center" }); });
-  $("#go-address").addEventListener("click", () => { state.step = "address"; render(); });
-  $("#back-arts").addEventListener("click", () => { state.step = "studio"; render(); });
+  $("#go-address").addEventListener("click", () => {
+    if (state.item) { state.item = 0; state.step = "extras"; state.photo = null; render(); window.scrollTo(0, 0); return; }
+    nextStep();
+  });
+  $("#back-arts").addEventListener("click", () => { state.step = itemsOf(state.order).length ? "extras" : "studio"; render(); });
+  $("#back-extras").addEventListener("click", () => { state.item = 0; state.step = "extras"; state.photo = null; render(); });
+  $("#extras-next").addEventListener("click", () => { state.step = "address"; render(); });
+  $("#extras-back").addEventListener("click", () => { state.item = 0; state.step = "studio"; render(); });
   $("#edit-address").addEventListener("click", () => { delete $("#address-form").dataset.filled; state.step = "address"; render(); });
 
   // endereço
@@ -557,9 +754,11 @@
     btn.disabled = true;
     btn.textContent = "Enviando…";
     try {
+      const names = [];
+      $("#names").querySelectorAll("input[data-item]").forEach((el) => { names[Number(el.dataset.item)] = el.value; });
       const out = await PN.api("confirm", {
         token: state.token,
-        pet_name: af.pet_name.value, customer_notes: af.customer_notes.value,
+        pet_name: names[0] || "", pet_names: names, customer_notes: af.customer_notes.value,
         recipient: af.recipient.value, cep: af.cep.value,
         street: af.street.value, number: af.number.value, complement: af.complement.value,
         district: af.district.value, city: af.city.value, state: af.state.value,

@@ -33,10 +33,11 @@
       return send(C.API_URL, { method: "POST", headers, body: JSON.stringify({ action, ...(data || {}) }) });
     },
 
-    upload(token, blob, species) {
+    upload(token, blob, species, item) {
       const form = new FormData();
       form.append("token", token);
       form.append("species", species || "");
+      form.append("item", String(item || 0));
       form.append("photo", blob, "pet.jpg");
       return send(C.API_URL + "?action=generate", { method: "POST", body: form });
     },
@@ -138,6 +139,7 @@
   // Configuração pública da loja (preço, contato, avisos). Todas as páginas esperam por ela.
   PN.ready = PN.api("config").then((c) => {
     PN.store = c.store || {};
+    PN.publicConfig = c;
     return c;
   }).catch(() => null).then((c) => {
     initTracking(PN.store.meta_pixel_id || C.META_PIXEL_ID, PN.store.google_tag_id || C.GOOGLE_TAG_ID);

@@ -695,7 +695,9 @@
     ];
     const comps = model.parts.map((_, i) => `<component p:path="/3D/Objects/object_${i + 1}.model" objectid="${i + 1}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>`).join("");
     files.push({ name: "3D/3dmodel.model", data: `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="pt-BR" ${NS} requiredextensions="p">` +
-      `<metadata name="Application">Patinha de Natal</metadata><metadata name="Title">${esc(title)}</metadata>` +
+      // O Bambu Studio só lê as cores por parte de arquivos que ele reconhece como seus.
+      `<metadata name="Application">BambuStudio-02.03.00.70</metadata><metadata name="BambuStudio:3mfVersion">1</metadata>` +
+      `<metadata name="Title">${esc(title)}</metadata><metadata name="Designer">Patinha de Natal</metadata>` +
       `<resources><object id="${parent}" name="${esc(title)}" type="model" p:UUID="${uuid()}"><components>${comps}</components></object></resources>` +
       `<build p:UUID="${uuid()}"><item objectid="${parent}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 128 128 0" printable="1"/></build></model>` });
     files.push({ name: "3D/_rels/3dmodel.model.rels", data: '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -706,7 +708,13 @@
     const parts = model.parts.map((p, i) => `<part id="${i + 1}" subtype="normal_part"><metadata key="name" value="${esc(p.name + " - " + p.label)}"/><metadata key="extruder" value="${slotOf[i]}"/></part>`).join("");
     files.push({ name: "Metadata/model_settings.config", data: `<?xml version="1.0" encoding="UTF-8"?>\n<config><object id="${parent}"><metadata key="name" value="${esc(title)}"/><metadata key="extruder" value="1"/>${parts}</object>` +
       `<plate><metadata key="plater_id" value="1"/><metadata key="plater_name" value=""/><metadata key="locked" value="false"/><model_instance><metadata key="object_id" value="${parent}"/><metadata key="instance_id" value="0"/></model_instance></plate></config>` });
-    files.push({ name: "Metadata/project_settings.config", data: JSON.stringify({ filament_colour: order.map((o) => o.hex) }, null, 4) });
+    files.push({ name: "Metadata/project_settings.config", data: JSON.stringify({
+      filament_colour: order.map((o) => o.hex),
+      filament_type: order.map(() => "PLA"),
+      filament_settings_id: order.map(() => "Bambu PLA Basic @BBL X1C"),
+      filament_ids: order.map(() => "GFA00"),
+      filament_vendor: order.map(() => "Bambu Lab"),
+    }, null, 4) });
     return files;
   }
 
@@ -844,9 +852,13 @@
     const rim = new THREE.DirectionalLight(0xfff1dd, 0.9);
     rim.position.set(60, -30, -60);
     scene.add(rim);
-    const back = new THREE.DirectionalLight(0xffffff, 1.5);   // ilumina o verso (nome gravado)
+    const back = new THREE.DirectionalLight(0xffffff, 0.9);   // ilumina o verso
     back.position.set(-50, 70, -90);
     scene.add(back);
+    // luz rasante pelo verso: realça as letras gravadas (sombra/brilho nas bordas)
+    const graze = new THREE.DirectionalLight(0xfff4e2, 2.2);
+    graze.position.set(-120, 60, -22);
+    scene.add(graze);
 
     const group = new THREE.Group();
     model.parts.forEach((p) => {

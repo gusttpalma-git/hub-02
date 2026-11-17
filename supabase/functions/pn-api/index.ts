@@ -162,6 +162,8 @@ function cfg(s: Settings) {
     maxColors: Math.min(6, Math.max(2, parseInt(s.max_colors || "4", 10) || 4)),
     adminHash: s.admin_password_hash || "",
     filaments: parseFilaments(s.filaments),
+    extraPrices: String(s.extra_prices || "1290,990,690").split(",").map((v) => Math.max(0, parseInt(v, 10) || 0)).filter((v) => v > 0).slice(0, 3),
+    extraCredits: Math.min(10, Math.max(1, parseInt(s.extra_credits || "3", 10) || 3)),
     model: {
       diameter: num(s.model_diameter, 70, 40, 120),
       base: num(s.model_base, 3.2, 1.2, 5),
@@ -183,6 +185,11 @@ function cfg(s: Settings) {
       brand: s.brand_name || "Patinha de Natal",
     },
     ownerEmail: s.owner_email || "",
+    pickup: {
+      enabled: s.pickup_enabled !== "false",
+      name: s.pickup_name || "Studio Lina Palma",
+      address: s.pickup_address || "Rua 7 de Setembro, 433 - Centro, Cosmópolis - SP, 13150-013",
+    },
     store: {
       whatsapp: digits(s.store_whatsapp),
       company: s.store_company || "",
@@ -257,21 +264,28 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
       "Guarde este e-mail: o botão abaixo abre o seu pedido em qualquer aparelho.",
     ], button));
   } else if (event === "confirmed") {
-    const address = `${esc(order.street)}, ${esc(order.number)}${order.complement ? " — " + esc(order.complement) : ""}<br>${esc(order.district)} · ${esc(order.city)}/${esc(order.state)} · CEP ${esc(order.cep)}`;
+    const pickup = order.delivery_method === "retirada";
+    const address = pickup ? `Retirada em ${esc(c.pickup.name)}<br>${esc(c.pickup.address)}` : `${esc(order.street)}, ${esc(order.number)}${order.complement ? " — " + esc(order.complement) : ""}<br>${esc(order.district)} · ${esc(order.city)}/${esc(order.state)} · CEP ${esc(order.cep)}`;
     await sendMail(c.mail, order.email, `Pedido ${order.code} confirmado`, mailLayout(c.mail.brand, "Seu enfeite vai para a produção 🐾", [
       `Olá, ${first}! Recebemos a arte escolhida e o endereço.`,
       `<strong>Entrega para:</strong><br>${esc(order.recipient)}<br>${address}`,
-      "Assim que o pacote for postado, você recebe o código de rastreio por e-mail.",
+      pickup ? "Avisamos por e-mail e WhatsApp quando estiver pronto para retirar." : "Assim que o pacote for postado, você recebe o código de rastreio por e-mail.",
     ], button));
     if (c.ownerEmail) {
       await sendMail(c.mail, c.ownerEmail, `Novo pedido para produzir — ${order.code}`, mailLayout(c.mail.brand, `Pedido ${esc(order.code)} pronto para produzir`, [
         `<strong>Cliente:</strong> ${esc(order.name)} · ${esc(order.whatsapp)}`,
-        `<strong>Pet:</strong> ${esc(order.pet_name || "—")}`,
+        `<strong>Pet:</strong> ${esc(order.pet_name || "—")}${order.extras ? ` · + ${order.extras} enfeite(s) adicional(is)` : ""}`,
         ...(order.customer_notes ? [`<strong>Observações do cliente:</strong> ${esc(order.customer_notes)}`] : []),
-        `<strong>Entrega:</strong><br>${esc(order.recipient)}<br>${address}`,
+        `<strong>${pickup ? "Retirada" : "Entrega"}:</strong><br>${esc(order.recipient)}<br>${address}`,
         "A arte e o modelo 3D (3MF ou STLs por cor) estão no painel, prontos para baixar.",
       ]));
     }
+  } else if (order.delivery_method === "retirada") {
+    await sendMail(c.mail, order.email, `Seu enfeite está pronto para retirar — pedido ${order.code}`, mailLayout(c.mail.brand, "Pronto para retirar! 🎁", [
+      `Olá, ${first}! O seu enfeite está pronto.`,
+      `<strong>Onde retirar:</strong> ${esc(c.pickup.name)}<br>${esc(c.pickup.address)}`,
+      "Leve o código do pedido: " + esc(order.code) + ".",
+    ], button));
   } else {
     await sendMail(c.mail, order.email, `Seu enfeite foi enviado — pedido ${order.code}`, mailLayout(c.mail.brand, "Seu enfeite está a caminho! 📦", [
       `Olá, ${first}! Postamos o seu pedido.`,
@@ -319,9 +333,16 @@ async function orderView(order: any) {
   const { data: fresh } = await db.from("pn_orders").select("*").eq("id", order.id).single();
   const o = fresh ?? order;
   const { data: gens } = await db.from("pn_generations")
-    .select("id, status, result_path, created_at").eq("order_id", o.id).order("created_at");
+    .select("id, status, item, result_path, created_at").eq("order_id", o.id).order("created_at");
+  const { data: items } = await db.from("pn_order_items")
+    .select("position, kind, credits_total, credits_used, chosen_generation, pet_name").eq("order_id", o.id).order("position");
   const urls = await signedUrls((gens ?? []).map((g) => g.result_path));
   return {
+    extras: o.extras,
+    items: (items ?? []).map((it) => ({
+      position: it.position, kind: it.kind, chosen_generation: it.chosen_generation, pet_name: it.pet_name,
+      credits_total: it.credits_total, credits_left: Math.max(0, it.credits_total - it.credits_used),
+    })),
     code: o.code,
     name: o.name,
     payment_status: o.payment_status,
@@ -329,7 +350,7 @@ async function orderView(order: any) {
     credits_total: o.credits_total,
     credits_left: Math.max(0, o.credits_total - o.credits_used),
     generations: (gens ?? []).map((g) => ({
-      id: g.id, status: g.status,
+      id: g.id, status: g.status, item: g.item ?? 0,
       url: g.result_path ? urls[g.result_path] ?? null : null,
       // link curto e permanente da arte, para o cliente mandar no WhatsApp
       share_url: g.result_path ? `${FUNCTION_URL}?action=art&g=${g.id}` : null,
@@ -343,6 +364,7 @@ async function orderView(order: any) {
     amount_cents: o.amount_cents,
     shipping_cents: o.shipping_cents,
     locked_cep: o.shipping_cents > 0 ? o.cep : null,
+    delivery_method: o.delivery_method,
     address: o.confirmed_at
       ? { recipient: o.recipient, cep: o.cep, street: o.street, number: o.number, complement: o.complement, district: o.district, city: o.city, state: o.state }
       : null,
@@ -419,6 +441,9 @@ async function publicConfig() {
     sales_open: c.testMode || !!c.mpToken,
     shipping_mode: c.shipping.mode === "incluso" ? "incluso" : "calculado",
     store: c.store,
+    pickup: c.pickup.enabled ? { name: c.pickup.name, address: c.pickup.address } : null,
+    extra_prices: c.extraPrices,
+    extra_credits: c.extraCredits,
     model: c.model,
     filaments: c.filaments,
     regions: REGIONS.map((r) => ({ id: r, label: REGION_LABEL[r], on: c.shipping.regions[r].on, until: c.shipping.regions[r].until })),
@@ -436,6 +461,18 @@ async function openArt(url: URL) {
   return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
 
+// Quantos adicionais (0..3) e quanto custam: o 2º enfeite custa extra_prices[0], o 3º [1]…
+function extrasOf(c: ReturnType<typeof cfg>, v: unknown) {
+  const n = Math.max(0, Math.min(c.extraPrices.length, parseInt(String(v ?? 0), 10) || 0));
+  const prices = c.extraPrices.slice(0, n);
+  return { n, prices, cents: prices.reduce((a, b) => a + b, 0) };
+}
+
+// Pacote um pouco mais pesado quando vão mais peças (≈ 20 g cada).
+function shippingFor(c: ReturnType<typeof cfg>, extras: number) {
+  return { ...c.shipping, weightGrams: c.shipping.weightGrams + extras * 20 };
+}
+
 async function quote(b: Body) {
   const c = cfg(await loadSettings());
   const cep = digits(b.cep);
@@ -446,8 +483,9 @@ async function quote(b: Body) {
     throw new HttpError(400, (err as Error).message);
   }
   try {
-    const q = await quoteShipping(c.shipping, cep);
-    return json({ shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, total_cents: c.priceCents + q.cents });
+    const ex = extrasOf(c, b.extras);
+    const q = await quoteShipping(shippingFor(c, ex.n), cep);
+    return json({ shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, extras_cents: ex.cents, total_cents: c.priceCents + ex.cents + q.cents });
   } catch (_) {
     throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
   }
@@ -476,22 +514,27 @@ async function checkout(b: Body) {
   }
 
   // O frete é sempre recalculado aqui: o valor cobrado nunca vem do navegador.
-  let shipping = { cents: 0, label: "Frete incluso" };
-  const cep = digits(b.cep);
-  if (cep.length !== 8) throw new HttpError(400, "Digite o CEP de entrega (8 números).");
-  try {
-    checkRegion(c.shipping, cep);
-  } catch (err) {
-    throw new HttpError(400, (err as Error).message);
-  }
-  if (c.shipping.mode !== "incluso") {
+  const pickup = b.delivery === "retirada";
+  const ex = extrasOf(c, b.extras);
+  if (pickup && !c.pickup.enabled) throw new HttpError(400, "A retirada não está disponível no momento.");
+  let shipping = { cents: 0, label: pickup ? "Retirada: " + c.pickup.name : "Frete incluso" };
+  const cep = pickup ? "" : digits(b.cep);
+  if (!pickup && cep.length !== 8) throw new HttpError(400, "Digite o CEP de entrega (8 números).");
+  if (!pickup) {
     try {
-      shipping = await quoteShipping(c.shipping, cep);
+      checkRegion(c.shipping, cep);
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+  }
+  if (!pickup && c.shipping.mode !== "incluso") {
+    try {
+      shipping = await quoteShipping(shippingFor(c, ex.n), cep);
     } catch (_) {
       throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
     }
   }
-  const totalCents = c.priceCents + shipping.cents;
+  const totalCents = c.priceCents + ex.cents + shipping.cents;
 
   const token = randomHex(24);
   const { data: order, error } = await db.from("pn_orders").insert({
@@ -503,13 +546,24 @@ async function checkout(b: Body) {
     amount_cents: totalCents,
     shipping_cents: shipping.cents,
     shipping_label: shipping.label,
-    cep,
+    cep: cep || null,
+    delivery_method: pickup ? "retirada" : "correios",
+    extras: ex.n,
+    extras_cents: ex.cents,
     site_url: base,
     credits_total: c.credits,
     is_test: c.testMode,
     ...(c.testMode ? { payment_status: "paid", paid_at: new Date().toISOString() } : {}),
   }).select("*").single();
   if (error || !order) throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
+  if (ex.n) {
+    const rows = Array.from({ length: ex.n }, (_, i) => ({ order_id: order.id, position: i + 1, credits_total: c.extraCredits }));
+    const { error: itemsError } = await db.from("pn_order_items").insert(rows);
+    if (itemsError) {
+      await db.from("pn_orders").delete().eq("id", order.id);
+      throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
+    }
+  }
 
   const studio = `${base}criar.html?t=${token}`;
   if (c.testMode) {
@@ -528,7 +582,13 @@ async function checkout(b: Body) {
           quantity: 1,
           currency_id: "BRL",
           unit_price: c.priceCents / 100,
-        }, ...(shipping.cents > 0 ? [{
+        }, ...ex.prices.map((cents, i) => ({
+          id: "enfeite-adicional-" + (i + 1),
+          title: `Enfeite adicional ${i + 1}`,
+          quantity: 1,
+          currency_id: "BRL",
+          unit_price: cents / 100,
+        })), ...(shipping.cents > 0 ? [{
           id: "frete",
           title: "Frete",
           description: shipping.label,
@@ -593,6 +653,8 @@ async function generate(req: Request) {
 
   const c = cfg(await loadSettings());
   if (!c.openaiKey && !c.testMode) throw new HttpError(503, "A criação de artes está temporariamente indisponível.");
+  const item = Math.max(0, Math.min(3, parseInt(String(form.get("item") ?? "0"), 10) || 0));
+  if (item > (order.extras ?? 0)) throw new HttpError(400, "Esse enfeite não faz parte do pedido.");
   const species = String(form.get("species") || "");
   if (!(SPECIES as readonly string[]).includes(species)) throw new HttpError(400, "Escolha qual é o seu pet: gato, cachorro, ave ou roedor.");
 
@@ -602,7 +664,7 @@ async function generate(req: Request) {
   const up = await db.storage.from(BUCKET).upload(sourcePath, photo, { contentType: file.type });
   if (up.error) throw new HttpError(500, "Não conseguimos receber a foto. Tente de novo.");
 
-  const { data: genId, error } = await db.rpc("pn_start_generation", { p_order: order.id, p_source: sourcePath });
+  const { data: genId, error } = await db.rpc("pn_start_generation_item", { p_order: order.id, p_item: item, p_source: sourcePath });
   if (error) throw new HttpError(500, "Não foi possível iniciar a criação.");
   if (!genId) {
     await db.storage.from(BUCKET).remove([sourcePath]);
@@ -622,21 +684,42 @@ async function choose(b: Body) {
   if (order.payment_status !== "paid") throw new HttpError(402, "O pagamento ainda não foi confirmado.");
   if (order.confirmed_at) throw new HttpError(409, "Este pedido já foi finalizado.");
   if (!isUuid(b.generation_id)) throw new HttpError(400, "Escolha uma das artes.");
+  const item = Math.max(0, parseInt(String(b.item ?? 0), 10) || 0);
   const { data: gen } = await db.from("pn_generations").select("id")
-    .eq("id", b.generation_id).eq("order_id", order.id).eq("status", "done").maybeSingle();
+    .eq("id", b.generation_id).eq("order_id", order.id).eq("item", item).eq("status", "done").maybeSingle();
   if (!gen) throw new HttpError(400, "Essa arte não está disponível.");
-  await db.from("pn_orders").update({ chosen_generation: gen.id }).eq("id", order.id);
+  if (item === 0) await db.from("pn_orders").update({ chosen_generation: gen.id }).eq("id", order.id);
+  else await db.from("pn_order_items").update({ chosen_generation: gen.id, kind: "novo" }).eq("order_id", order.id).eq("position", item);
   return json({ ok: true });
+}
+
+// Para cada adicional: "novo" (outro pet, com arte própria) ou "copia" (mais um igual ao primeiro).
+async function itemKind(b: Body) {
+  const order = await getOrderByToken(b.token);
+  if (order.confirmed_at) throw new HttpError(409, "Este pedido já foi finalizado.");
+  const item = parseInt(String(b.item ?? 0), 10) || 0;
+  if (!(item >= 1 && item <= (order.extras ?? 0))) throw new HttpError(400, "Esse enfeite não faz parte do pedido.");
+  if (!["novo", "copia"].includes(b.kind)) throw new HttpError(400, "Escolha: outro pet ou mais um igual.");
+  await db.from("pn_order_items").update({ kind: b.kind, ...(b.kind === "copia" ? { chosen_generation: null } : {}) })
+    .eq("order_id", order.id).eq("position", item);
+  return json({ order: await orderView(await getOrderByToken(b.token)) });
 }
 
 async function confirm(b: Body) {
   const order = await getOrderByToken(b.token);
   if (order.payment_status !== "paid") throw new HttpError(402, "O pagamento ainda não foi confirmado.");
   if (!order.chosen_generation) throw new HttpError(400, "Escolha uma arte antes de continuar.");
+  const { data: items } = await db.from("pn_order_items").select("position, kind, chosen_generation").eq("order_id", order.id).order("position");
+  for (const it of items ?? []) {
+    if (!it.kind) throw new HttpError(400, `Diga se o enfeite ${it.position + 1} é de outro pet ou mais um igual.`);
+    if (it.kind === "novo" && !it.chosen_generation) throw new HttpError(400, `Escolha a arte do enfeite ${it.position + 1}.`);
+  }
+  const names: unknown[] = Array.isArray(b.pet_names) ? b.pet_names : [];
   if (order.production_status !== "aguardando") throw new HttpError(409, "Seu enfeite já está em produção. Fale com a gente para alterar o endereço.");
 
+  const pickup = order.delivery_method === "retirada";
   const a = {
-    pet_name: clean(b.pet_name, 60) || null,
+    pet_name: clean(b.pet_name, 20) || null,
     customer_notes: clean(b.customer_notes, 500) || null,
     recipient: clean(b.recipient, 120),
     // Se o frete foi cobrado por CEP, a entrega é nesse CEP.
@@ -648,7 +731,10 @@ async function confirm(b: Body) {
     city: clean(b.city, 100),
     state: clean(b.state, 2).toUpperCase(),
   };
-  if (a.recipient.length < 3) throw new HttpError(400, "Digite o nome de quem vai receber.");
+  if (a.recipient.length < 3) throw new HttpError(400, pickup ? "Digite o nome de quem vai retirar." : "Digite o nome de quem vai receber.");
+  if (pickup) {
+    for (const k of ["cep", "street", "number", "complement", "district", "city", "state"] as const) (a as Record<string, unknown>)[k] = null;
+  } else {
   if (a.cep.length !== 8) throw new HttpError(400, "Confira o CEP (8 números).");
   if (!a.street) throw new HttpError(400, "Digite o nome da rua.");
   if (!a.number) throw new HttpError(400, "Digite o número (ou S/N).");
@@ -656,14 +742,18 @@ async function confirm(b: Body) {
   if (!a.city) throw new HttpError(400, "Digite a cidade.");
   if (!/^[A-Z]{2}$/.test(a.state)) throw new HttpError(400, "Escolha o estado.");
   try {
-    checkRegion(cfg(await loadSettings()).shipping, a.cep, false);
+    checkRegion(cfg(await loadSettings()).shipping, a.cep as string, false);
   } catch (err) {
     throw new HttpError(400, (err as Error).message);
+  }
   }
 
   await db.from("pn_orders")
     .update({ ...a, confirmed_at: order.confirmed_at ?? new Date().toISOString() })
     .eq("id", order.id);
+  for (const it of items ?? []) {
+    await db.from("pn_order_items").update({ pet_name: clean(names[it.position], 20) || null }).eq("order_id", order.id).eq("position", it.position);
+  }
   const saved = await getOrderByToken(b.token);
   if (!order.confirmed_at) await notify("confirmed", saved, cfg(await loadSettings()));
   return json({ order: await orderView(saved) });
@@ -721,6 +811,9 @@ function settingsView(s: Settings) {
     email_from: c.mail.from,
     owner_email: c.ownerEmail,
     store: c.store,
+    pickup: c.pickup,
+    extra_prices: c.extraPrices,
+    extra_credits: c.extraCredits,
     filaments_text: c.filaments.map((f) => `${f.name} ${f.hex}`).join("\n"),
     filaments: c.filaments,
     model: c.model,
@@ -738,15 +831,18 @@ async function adminOrders(b: Body) {
 
   const ids = (orders ?? []).map((o) => o.id);
   const { data: gens } = ids.length
-    ? await db.from("pn_generations").select("id, order_id, status, species, source_path, result_path, created_at").in("order_id", ids).order("created_at")
+    ? await db.from("pn_generations").select("id, order_id, status, species, item, source_path, result_path, created_at").in("order_id", ids).order("created_at")
     : { data: [] };
   const urls = await signedUrls((gens ?? []).flatMap((g) => [g.source_path, g.result_path]));
+  const { data: allItems } = ids.length
+    ? await db.from("pn_order_items").select("order_id, position, kind, chosen_generation, pet_name").in("order_id", ids).order("position")
+    : { data: [] };
 
   return json({
     orders: (orders ?? []).map((o) => ({
       id: o.id, code: o.code, created_at: o.created_at, paid_at: o.paid_at, confirmed_at: o.confirmed_at,
       name: o.name, email: o.email, whatsapp: o.whatsapp, amount_cents: o.amount_cents,
-      shipping_cents: o.shipping_cents, shipping_label: o.shipping_label,
+      shipping_cents: o.shipping_cents, shipping_label: o.shipping_label, delivery_method: o.delivery_method,
       payment_status: o.payment_status, is_test: o.is_test, mp_payment_id: o.mp_payment_id,
       credits_total: o.credits_total, credits_used: o.credits_used,
       pet_name: o.pet_name, recipient: o.recipient, cep: o.cep, street: o.street, number: o.number,
@@ -754,8 +850,10 @@ async function adminOrders(b: Body) {
       production_status: o.production_status, tracking_code: o.tracking_code, admin_notes: o.admin_notes,
       customer_notes: o.customer_notes,
       chosen_generation: o.chosen_generation,
+      extras: o.extras, extras_cents: o.extras_cents,
+      items: (allItems ?? []).filter((it) => it.order_id === o.id).map((it) => ({ position: it.position, kind: it.kind, chosen_generation: it.chosen_generation, pet_name: it.pet_name })),
       generations: (gens ?? []).filter((g) => g.order_id === o.id).map((g) => ({
-        id: g.id, status: g.status, species: g.species,
+        id: g.id, status: g.status, species: g.species, item: g.item ?? 0,
         photo_url: urls[g.source_path] ?? null,
         art_url: g.result_path ? urls[g.result_path] ?? null : null,
       })),
@@ -840,6 +938,20 @@ async function adminSaveSettings(b: Body) {
       await saveSetting("store_whatsapp", w);
     }
   }
+  if (Array.isArray(b.extra_prices)) {
+    const list = b.extra_prices.map((v: unknown) => Math.round(Number(v) || 0)).filter((v: number) => v >= 100 && v <= 1000000).slice(0, 3);
+    await saveSetting("extra_prices", list.join(","));
+  }
+  if (b.extra_credits !== undefined) {
+    const v = parseInt(b.extra_credits, 10);
+    if (!(v >= 1 && v <= 10)) throw new HttpError(400, "Tentativas por pet adicional: de 1 a 10.");
+    await saveSetting("extra_credits", String(v));
+  }
+  if (b.pickup && typeof b.pickup === "object") {
+    if (b.pickup.enabled !== undefined) await saveSetting("pickup_enabled", b.pickup.enabled ? "true" : "false");
+    if (typeof b.pickup.name === "string" && b.pickup.name.trim()) await saveSetting("pickup_name", clean(b.pickup.name, 80));
+    if (typeof b.pickup.address === "string" && b.pickup.address.trim()) await saveSetting("pickup_address", clean(b.pickup.address, 200));
+  }
   if (typeof b.filaments === "string") {
     const list = parseFilaments(b.filaments);
     if (list.length < 2) throw new HttpError(400, "Cadastre pelo menos 2 filamentos (um por linha: Nome #RRGGBB).");
@@ -892,6 +1004,7 @@ Deno.serve(async (req) => {
       case "order": return await getOrder(body);
       case "recover": return await recover(body);
       case "choose": return await choose(body);
+      case "item-kind": return await itemKind(body);
       case "confirm": return await confirm(body);
       case "admin-login": return json({ settings: settingsView(await requireAdmin(req)) });
       case "admin-orders": await requireAdmin(req); return await adminOrders(body);

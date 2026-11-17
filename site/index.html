@@ -172,16 +172,34 @@
               <input name="name" autocomplete="name" required maxlength="120" placeholder="Maria da Silva"></label>
             <label class="field"><span>Seu e-mail</span>
               <input name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="maria@email.com"></label>
-            <div class="row2">
-              <label class="field"><span>WhatsApp <small>(com DDD)</small></span>
-                <input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
-              <label class="field"><span>CEP de entrega</span>
-                <input name="cep" inputmode="numeric" autocomplete="postal-code" required placeholder="00000-000"></label>
+            <label class="field"><span>WhatsApp <small>(com DDD)</small></span>
+              <input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
+            <div class="extras" id="extras" hidden>
+              <div class="extras-text">
+                <b>Quer mais enfeites?</b>
+                <small>Outro pet ou mais um igual, para presentear.</small>
+              </div>
+              <div class="stepper" role="group" aria-label="Enfeites adicionais">
+                <button type="button" id="extras-minus" aria-label="Menos um enfeite">−</button>
+                <output id="extras-count" aria-live="polite">0</output>
+                <button type="button" id="extras-plus" aria-label="Mais um enfeite">+</button>
+              </div>
+              <p class="extras-prices" id="extras-prices"></p>
             </div>
+            <fieldset class="delivery" id="delivery" hidden>
+              <legend>Como você quer receber?</legend>
+              <label class="choice"><input type="radio" name="delivery" value="correios" checked>
+                <span><b>📦 Receber em casa</b><small>Pelos Correios, para o seu endereço</small></span></label>
+              <label class="choice"><input type="radio" name="delivery" value="retirada">
+                <span><b>🏠 Retirar em Cosmópolis</b><small id="pickup-label">Sem frete</small></span></label>
+            </fieldset>
+            <label class="field" id="cep-field"><span>CEP de entrega</span>
+              <input name="cep" inputmode="numeric" autocomplete="postal-code" required placeholder="00000-000"></label>
             <p class="small muted" id="quote-status" style="margin:-8px 0 14px" aria-live="polite"></p>
             <div class="totals" id="totals" hidden>
               <div><span>Enfeite personalizado</span><span data-price>R$ 49,90</span></div>
-              <div><span>Frete <small class="muted" id="quote-label"></small></span><span id="quote-shipping"></span></div>
+              <div id="row-extras" hidden><span id="extras-label"></span><span id="quote-extras"></span></div>
+              <div id="row-ship"><span>Frete <small class="muted" id="quote-label"></small></span><span id="quote-shipping"></span></div>
               <div class="total"><span>Total</span><span id="quote-total"></span></div>
             </div>
             <button class="btn block" type="submit" id="checkout-btn">Ir para o pagamento · <span id="btn-total" data-price>R$ 49,90</span></button>
@@ -191,8 +209,9 @@
 
           <aside class="deadlines" id="deadlines" hidden>
             <h3>Para chegar antes do Natal</h3>
-            <p class="small muted" style="margin:0">Último dia para pedir, por região:</p>
+            <p class="small muted" style="margin:0">Último dia recomendado para pedir, por região:</p>
             <ul id="deadline-list"></ul>
+            <p class="small muted" style="margin:12px 0 0">Datas recomendadas, com base nos prazos médios dos Correios. O transporte não depende de nós, então não conseguimos garantir o dia da entrega.</p>
           </aside>
         </div>
       </div>
@@ -210,6 +229,9 @@
         <details><summary>Serve para gato, ave e outros bichinhos?</summary><p>Sim. Você escolhe se é gato, cachorro, ave ou roedor, e a arte é feita pensando nos detalhes de cada um, como a cor dos olhos dos gatos.</p></details>
         <details><summary>As cores ficam iguais às da tela?</summary><p>A prévia já mostra as cores dos filamentos que usamos. Como a peça é impressa em plástico, com relevo, pode haver pequenas diferenças de tom.</p></details>
         <details><summary>Quanto tempo demora para chegar?</summary><p>Produzimos em até <span data-prazo>5 dias úteis</span> depois que você escolhe a arte. Depois, é o prazo dos Correios para a sua cidade. Você recebe o código de rastreio.</p></details>
+        <details><summary>Posso pedir mais de um enfeite?</summary><p>Pode. No pedido, escolha quantos enfeites a mais você quer (até 3). Cada um pode ser de outro pet ou igual ao primeiro, com outro nome no verso, e sai mais barato.</p></details>
+        <details><summary>Posso retirar em vez de receber pelos Correios?</summary><p>Pode, sem frete: a retirada é no Studio Lina Palma, Rua 7 de Setembro, 433, Centro, Cosmópolis (SP). Avisamos pelo WhatsApp quando estiver pronto.</p></details>
+        <details><summary>As datas para chegar antes do Natal são garantidas?</summary><p>São datas recomendadas, calculadas com os prazos médios dos Correios mais o nosso tempo de produção. O transporte não depende de nós, então não conseguimos garantir o dia exato da entrega. Se for para muito perto do Natal, prefira pedir antes ou retirar.</p></details>
         <details><summary>Já paguei. Como volto para enviar a foto?</summary><p>Toque em “Já comprei”, no alto da página, e informe o e-mail e o WhatsApp usados na compra.</p></details>
       </div>
     </section>

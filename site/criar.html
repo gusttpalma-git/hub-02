@@ -59,6 +59,7 @@
       <div class="card">
         <h2 class="center" id="studio-title">Envie a foto do seu pet</h2>
         <p class="paws" id="paws" aria-live="polite"></p>
+        <p class="center" style="margin:-8px 0 14px"><button class="linklike" type="button" id="back-extras" hidden>← Voltar para os enfeites</button></p>
         <div class="alert error" id="studio-error" hidden role="alert"></div>
 
         <div id="arts-block" hidden>
@@ -128,15 +129,36 @@
       </div>
     </section>
 
+    <!-- enfeites adicionais: outro pet ou mais um igual -->
+    <section id="view-extras" hidden>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Endereço</li></ol>
+      <div class="card">
+        <h2 class="center">Seus outros enfeites</h2>
+        <p class="center muted">Para cada um, diga se é de outro pet ou mais um igual ao primeiro.</p>
+        <div class="alert error" id="extras-error" hidden role="alert"></div>
+        <div id="extras-list" class="extras-list"></div>
+        <button class="btn green block" type="button" id="extras-next" disabled>Continuar →</button>
+        <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="extras-back">← Voltar para a arte do primeiro</button></p>
+      </div>
+    </section>
+
     <!-- passo 3: endereço -->
     <section id="view-address" hidden>
       <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li class="on">3. Endereço</li></ol>
       <form class="card" id="address-form" novalidate>
-        <div class="mockup sm" style="margin-bottom:16px"><img id="address-art" alt="Arte escolhida aplicada no enfeite"></div>
-        <h2 class="center">Para onde enviamos?</h2>
+        <h2 class="center">O nome no verso</h2>
+        <div class="viewer name-viewer" id="name-viewer"><div class="loading"><div class="spinner dark"></div>Montando a prévia…</div></div>
+        <p class="viewer-note" id="name-caption">Verso do enfeite: digite o nome para ver como fica gravado.</p>
+        <div id="names" style="margin-top:16px"></div>
+
+        <h2 class="center" id="address-title" style="margin-top:12px">Para onde enviamos?</h2>
         <div class="alert error" id="address-error" hidden role="alert"></div>
-        <label class="field"><span>Nome do pet <small>(opcional)</small></span><input name="pet_name" maxlength="60" placeholder="Ex.: Mel"></label>
-        <label class="field"><span>Quem vai receber</span><input name="recipient" autocomplete="name" required maxlength="120"></label>
+        <div class="pickup-box" id="pickup-box" hidden>
+          🏠 Retirada em <span id="pickup-place"></span><br>
+          <a id="pickup-map" target="_blank" rel="noopener">Ver no mapa</a> · Avisamos pelo WhatsApp quando estiver pronto.
+        </div>
+        <label class="field"><span id="recipient-label">Quem vai receber</span><input name="recipient" autocomplete="name" required maxlength="120"></label>
+        <div id="addr-fields">
         <label class="field"><span>CEP</span><input name="cep" inputmode="numeric" autocomplete="postal-code" required placeholder="00000-000"></label>
         <p class="small muted" id="cep-status" style="margin:-10px 0 14px" aria-live="polite"></p>
         <label class="field"><span>Rua</span><input name="street" autocomplete="address-line1" required maxlength="160"></label>
@@ -153,8 +175,9 @@
               <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option>
             </select></label>
         </div>
+        </div>
         <label class="field"><span>Observações <small>(opcional)</small></span>
-          <textarea name="customer_notes" rows="3" maxlength="500" placeholder="Algum recado para a gente? Ex.: deixar na portaria"></textarea></label>
+          <textarea name="customer_notes" rows="3" maxlength="500" placeholder="Algo que a gente precise saber sobre a arte ou o nome? Ex.: o nome tem acento"></textarea></label>
         <button class="btn block" type="submit" id="confirm-btn">🎄 Finalizar meu pedido</button>
         <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="back-arts">← Voltar para as artes</button></p>
       </form>

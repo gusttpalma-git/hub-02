@@ -111,6 +111,7 @@
 
   function addressText(o) {
     if (!o.confirmed_at) return "";
+    if (o.delivery_method === "retirada") return "RETIRADA no ponto\nQuem retira: " + (o.recipient || "");
     return [
       o.recipient,
       o.street + ", " + o.number + (o.complement ? " — " + o.complement : ""),
@@ -135,22 +136,36 @@
     } }, "⬇ SVG");
     // modelo 3D pronto para imprimir (gerado aqui no navegador)
     const layersInfo = el("p", { class: "layers" });
-    const make3D = async (button, kind) => {
+    const make3D = async (button, kind, artUrl, petName, suffix) => {
       const t = button.textContent;
       button.disabled = true; button.textContent = "Montando o 3D…";
       try {
-        const model = await PN3D.build(chosen.art_url, {
-          ...modelCfg, filaments, petName: o.pet_name || "", brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
+        const model = await PN3D.build(artUrl || chosen.art_url, {
+          ...modelCfg, filaments, petName: petName || "", brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
         });
-        const title = `${o.code}${o.pet_name ? " - " + o.pet_name : ""}`;
+        const title = `${o.code}${suffix || ""}${petName ? " - " + petName : ""}`;
         const blob = kind === "3mf" ? await PN3D.export3MF(model, title) : await PN3D.exportSTLZip(model, title);
-        saveBlob(blob, fileBase + (kind === "3mf" ? ".3mf" : "-stl.zip"));
+        const base = (o.code + (suffix || "") + (petName ? "-" + petName : "")).replace(/[^\w-]+/g, "_");
+        saveBlob(blob, base + (kind === "3mf" ? ".3mf" : "-stl.zip"));
         layersInfo.textContent = "Trocas de cor: " + model.parts.slice(1).map((p) => `${p.from.toFixed(1)} mm → ${p.name}`).join(" · ");
       } catch (err) { alert("Não foi possível montar o modelo 3D: " + err.message); }
       button.disabled = false; button.textContent = t;
     };
-    const model3mf = el("button", { class: "btn green sm", type: "button", onclick: () => make3D(model3mf, "3mf") }, "⬇ Modelo 3D (3MF)");
-    const modelStl = el("button", { class: "btn ghost sm", type: "button", onclick: () => make3D(modelStl, "stl") }, "⬇ STLs por cor (.zip)");
+    const model3mf = el("button", { class: "btn green sm", type: "button", onclick: () => make3D(model3mf, "3mf", chosen.art_url, o.pet_name) }, "⬇ Modelo 3D (3MF)");
+    const modelStl = el("button", { class: "btn ghost sm", type: "button", onclick: () => make3D(modelStl, "stl", chosen.art_url, o.pet_name) }, "⬇ STLs por cor (.zip)");
+
+    // enfeites adicionais do mesmo pedido (outro pet ou mais um igual)
+    const extraPieces = (o.items || []).map((it) => {
+      const n = it.position + 1;
+      const gen = it.kind === "copia" ? chosen : o.generations.find((g) => g.id === it.chosen_generation);
+      const head = el("p", { class: "piece-head" }, el("b", {}, `Enfeite ${n}`), " · ",
+        it.kind === "copia" ? "igual ao 1" : it.kind === "novo" ? "outro pet" : "ainda não definido",
+        it.pet_name ? ` · verso: ${it.pet_name}` : "");
+      if (!gen || !gen.art_url) return el("div", { class: "piece" }, head);
+      const b1 = el("button", { class: "btn green sm", type: "button", onclick: () => make3D(b1, "3mf", gen.art_url, it.pet_name, "-" + n) }, "⬇ 3MF");
+      const b2 = el("button", { class: "btn ghost sm", type: "button", onclick: () => make3D(b2, "stl", gen.art_url, it.pet_name, "-" + n) }, "⬇ STLs");
+      return el("div", { class: "piece" }, head, el("div", { class: "piece-row" }, el("img", { src: gen.art_url, alt: "Arte do enfeite " + n, loading: "lazy" }), b1, b2));
+    });
 
     const art = el("div", {},
       chosen
@@ -161,6 +176,7 @@
         svgBtn,
         el("label", { class: "field", style: "margin:0" }, colors),
         el("button", { class: "btn ghost sm", type: "button", onclick: () => downloadFile(chosen.art_url, fileBase + ".png") }, "⬇ PNG")),
+      ...extraPieces,
       o.generations.length > 0 && el("div", { class: "thumbs" }, ...o.generations.flatMap((g) => [
         g.photo_url && el("a", { href: g.photo_url, target: "_blank", rel: "noopener", title: "Foto enviada" }, el("img", { src: g.photo_url, alt: "Foto enviada", loading: "lazy" })),
         g.art_url && el("a", { href: g.art_url, target: "_blank", rel: "noopener", title: "Arte gerada", class: g.id === o.chosen_generation ? "sel" : "" }, el("img", { src: g.art_url, alt: "Arte gerada", loading: "lazy" })),
@@ -186,7 +202,7 @@
     );
 
     // coluna 3 — produção
-    const status = el("select", {}, ...[["aguardando", "Para produzir"], ["producao", "Em produção"], ["enviado", "Enviado"], ["entregue", "Entregue"]]
+    const status = el("select", {}, ...[["aguardando", "Para produzir"], ["producao", "Em produção"], ["enviado", o.delivery_method === "retirada" ? "Pronto para retirar" : "Enviado"], ["entregue", o.delivery_method === "retirada" ? "Retirado" : "Entregue"]]
       .map(([v, t]) => el("option", { value: v, selected: o.production_status === v }, t)));
     const tracking = el("input", { value: o.tracking_code || "", placeholder: "Ex.: AA123456789BR", maxlength: 40 });
     const notes = el("textarea", { rows: 2, placeholder: "Só você vê", maxlength: 1000 }, o.admin_notes || "");
@@ -214,6 +230,8 @@
       el("header", {},
         el("strong", {}, o.code),
         el("span", { class: "badge " + b }, BUCKETS[b] || b),
+        o.delivery_method === "retirada" && el("span", { class: "badge retirada" }, "🏠 Retirada"),
+        (o.extras || 0) > 0 && el("span", { class: "badge extras" }, `${(o.extras || 0) + 1} enfeites`),
         o.is_test && el("span", { class: "badge teste" }, "TESTE"),
         el("span", { class: "muted small" }, "criado em " + date(o.created_at))),
       art, info, o.payment_status === "paid" ? controls : el("div", {}));
@@ -335,6 +353,13 @@
     f.credits.value = s.credits_per_order;
     f.test_mode.checked = s.test_mode;
     maxColors = s.max_colors || 4;
+    const pick = s.pickup || {};
+    f.pickup_enabled.checked = pick.enabled !== false;
+    f.pickup_name.value = pick.name || "";
+    f.pickup_address.value = pick.address || "";
+    const ep = s.extra_prices || [];
+    [0, 1, 2].forEach((i) => { f["extra_" + i].value = ep[i] ? (ep[i] / 100).toFixed(2).replace(".", ",") : ""; });
+    f.extra_credits.value = s.extra_credits || 3;
     filaments = s.filaments || [];
     modelCfg = s.model || {};
     f.filaments.value = s.filaments_text || "";
@@ -426,6 +451,9 @@
         max_colors: f.max_colors.value,
         store: Object.fromEntries(STORE_FIELDS.map((k) => [k, f["st_" + k].value])),
         filaments: f.filaments.value,
+        pickup: { enabled: f.pickup_enabled.checked, name: f.pickup_name.value, address: f.pickup_address.value },
+        extra_prices: [0, 1, 2].map((i) => toCents(f["extra_" + i].value)).filter((v) => v > 0),
+        extra_credits: f.extra_credits.value,
         model: { diameter: f.model_diameter.value, base: f.model_base.value, band: f.model_band.value },
         package_cm: { length: f.pk_length.value, width: f.pk_width.value, height: f.pk_height.value },
         regions: Object.fromEntries(REGIONS.map((r) => [r, { on: f["rg_on_" + r].checked, until: f["rg_until_" + r].value }])),
