@@ -33,9 +33,10 @@
       return send(C.API_URL, { method: "POST", headers, body: JSON.stringify({ action, ...(data || {}) }) });
     },
 
-    upload(token, blob) {
+    upload(token, blob, species) {
       const form = new FormData();
       form.append("token", token);
+      form.append("species", species || "");
       form.append("photo", blob, "pet.jpg");
       return send(C.API_URL + "?action=generate", { method: "POST", body: form });
     },
@@ -104,6 +105,7 @@
         const link = PN.whatsappLink(el.dataset.whatsapp || "");
         if (link) { el.href = link; el.hidden = false; } else { el.hidden = true; }
       });
+      document.querySelectorAll("[data-whatsapp-wrap]").forEach((el) => { el.hidden = !PN.whatsappLink(""); });
       const company = S.company || C.RAZAO_SOCIAL, cnpj = S.cnpj || C.CNPJ, mail = S.email || C.EMAIL_CONTATO;
       const legal = [company, cnpj && "CNPJ " + cnpj, mail].filter(Boolean).join(" · ");
       document.querySelectorAll("[data-legal]").forEach((el) => { el.textContent = legal; });

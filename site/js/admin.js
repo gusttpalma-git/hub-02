@@ -6,6 +6,8 @@
   let orders = [];
   let filter = "aguardando";
   let maxColors = 4;
+  let filaments = [];
+  let modelCfg = {};
 
   const call = (action, data) => PN.api(action, data, password);
 
@@ -130,15 +132,35 @@
       try { await downloadSvg(chosen.art_url, fileBase + ".svg", parseInt(colors.value, 10)); }
       catch (err) { alert("Não foi possível gerar o SVG: " + err.message); }
       svgBtn.disabled = false; svgBtn.textContent = t;
-    } }, "⬇ Baixar SVG");
+    } }, "⬇ SVG");
+    // modelo 3D pronto para imprimir (gerado aqui no navegador)
+    const layersInfo = el("p", { class: "layers" });
+    const make3D = async (button, kind) => {
+      const t = button.textContent;
+      button.disabled = true; button.textContent = "Montando o 3D…";
+      try {
+        const model = await PN3D.build(chosen.art_url, {
+          ...modelCfg, filaments, petName: o.pet_name || "", brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
+        });
+        const title = `${o.code}${o.pet_name ? " - " + o.pet_name : ""}`;
+        const blob = kind === "3mf" ? await PN3D.export3MF(model, title) : await PN3D.exportSTLZip(model, title);
+        saveBlob(blob, fileBase + (kind === "3mf" ? ".3mf" : "-stl.zip"));
+        layersInfo.textContent = "Trocas de cor: " + model.parts.slice(1).map((p) => `${p.from.toFixed(1)} mm → ${p.name}`).join(" · ");
+      } catch (err) { alert("Não foi possível montar o modelo 3D: " + err.message); }
+      button.disabled = false; button.textContent = t;
+    };
+    const model3mf = el("button", { class: "btn green sm", type: "button", onclick: () => make3D(model3mf, "3mf") }, "⬇ Modelo 3D (3MF)");
+    const modelStl = el("button", { class: "btn ghost sm", type: "button", onclick: () => make3D(modelStl, "stl") }, "⬇ STLs por cor (.zip)");
+
     const art = el("div", {},
       chosen
         ? el("img", { class: "art", src: chosen.art_url, alt: "Arte escolhida", loading: "lazy" })
         : el("div", { class: "art", style: "display:grid;place-items:center;text-align:center;color:var(--muted);font-weight:700;padding:14px" }, "Cliente ainda não escolheu a arte"),
       chosen && el("div", { class: "dl" },
+        model3mf, modelStl, layersInfo,
         svgBtn,
         el("label", { class: "field", style: "margin:0" }, colors),
-        el("button", { class: "btn ghost sm", type: "button", onclick: () => downloadFile(chosen.art_url, fileBase + ".png") }, "⬇ Baixar PNG")),
+        el("button", { class: "btn ghost sm", type: "button", onclick: () => downloadFile(chosen.art_url, fileBase + ".png") }, "⬇ PNG")),
       o.generations.length > 0 && el("div", { class: "thumbs" }, ...o.generations.flatMap((g) => [
         g.photo_url && el("a", { href: g.photo_url, target: "_blank", rel: "noopener", title: "Foto enviada" }, el("img", { src: g.photo_url, alt: "Foto enviada", loading: "lazy" })),
         g.art_url && el("a", { href: g.art_url, target: "_blank", rel: "noopener", title: "Arte gerada", class: g.id === o.chosen_generation ? "sel" : "" }, el("img", { src: g.art_url, alt: "Arte gerada", loading: "lazy" })),
@@ -313,6 +335,22 @@
     f.credits.value = s.credits_per_order;
     f.test_mode.checked = s.test_mode;
     maxColors = s.max_colors || 4;
+    filaments = s.filaments || [];
+    modelCfg = s.model || {};
+    f.filaments.value = s.filaments_text || "";
+    renderSwatches();
+    f.model_diameter.value = modelCfg.diameter ?? 70;
+    f.model_base.value = modelCfg.base ?? 2.4;
+    f.model_band.value = modelCfg.band ?? 0.4;
+    const pk = s.package_cm || {};
+    f.pk_length.value = pk.length ?? 16;
+    f.pk_width.value = pk.width ?? 11;
+    f.pk_height.value = pk.height ?? 2;
+    REGIONS.forEach((r) => {
+      const rg = (s.regions || {})[r] || { on: true, until: "" };
+      f["rg_on_" + r].checked = rg.on !== false;
+      f["rg_until_" + r].value = rg.until || "";
+    });
     f.max_colors.value = maxColors;
     f.openai_image_model.value = s.openai_image_model;
     f.openai_image_quality.value = s.openai_image_quality;
@@ -365,6 +403,13 @@
   }
   $("#settings").shipping_mode.addEventListener("change", showShipping);
 
+  function renderSwatches() {
+    const lines = $("#settings").filaments.value.split(/\n/);
+    const items = lines.map((l) => /^(.*?)[\s:;,-]*(#[0-9a-f]{6})\s*$/i.exec(l.trim())).filter((m) => m && m[1].trim());
+    $("#swatches").replaceChildren(...items.map((m) => el("span", {}, el("i", { style: "background:" + m[2] }), m[1].trim())));
+  }
+  $("#settings").filaments.addEventListener("input", renderSwatches);
+
   $("#settings").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target;
@@ -380,6 +425,10 @@
         test_mode: f.test_mode.checked,
         max_colors: f.max_colors.value,
         store: Object.fromEntries(STORE_FIELDS.map((k) => [k, f["st_" + k].value])),
+        filaments: f.filaments.value,
+        model: { diameter: f.model_diameter.value, base: f.model_base.value, band: f.model_band.value },
+        package_cm: { length: f.pk_length.value, width: f.pk_width.value, height: f.pk_height.value },
+        regions: Object.fromEntries(REGIONS.map((r) => [r, { on: f["rg_on_" + r].checked, until: f["rg_until_" + r].value }])),
         shipping_mode: f.shipping_mode.value,
         shipping_table: Object.fromEntries(REGIONS.map((r) => [r, toCents(f["ship_" + r].value)])),
         origin_cep: f.origin_cep.value,

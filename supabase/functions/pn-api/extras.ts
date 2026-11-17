@@ -24,6 +24,9 @@ const REGION: Record<string, string> = {
 };
 
 export const REGIONS = ["sudeste", "sul", "centro_oeste", "nordeste", "norte"] as const;
+export const REGION_LABEL: Record<string, string> = {
+  sudeste: "Sudeste", sul: "Sul", centro_oeste: "Centro-Oeste", nordeste: "Nordeste", norte: "Norte",
+};
 
 export function stateFromCep(cep: string): string | null {
   if (!/^\d{8}$/.test(cep)) return null;
@@ -32,9 +35,33 @@ export function stateFromCep(cep: string): string | null {
   return null;
 }
 
+// Hoje no horário de Brasília (AAAA-MM-DD).
+function todayBR(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+// Confere se entregamos nesse CEP (e, na compra, se ainda dá tempo para a data-limite da região).
+export function checkRegion(c: ShippingConfig, cep: string, checkDeadline = true): { uf: string; region: string } {
+  const uf = stateFromCep(cep);
+  if (!uf) throw new Error("Não encontramos esse CEP. Confira os números.");
+  const region = REGION[uf];
+  const rule = c.regions?.[region];
+  if (rule && !rule.on) {
+    throw new Error(`Por enquanto não entregamos na região ${REGION_LABEL[region]} (${uf}). Fale com a gente pelo WhatsApp.`);
+  }
+  if (checkDeadline && rule?.until && todayBR() > rule.until) {
+    const [y, m, d] = rule.until.split("-");
+    void y;
+    throw new Error(`Os pedidos para a região ${REGION_LABEL[region]} encerraram em ${d}/${m}, para chegar antes do Natal.`);
+  }
+  return { uf, region };
+}
+
 // ───────────────────────── cálculo do frete ─────────────────────────
 
 export type ShippingConfig = {
+  regions: Record<string, { on: boolean; until: string }>;
+  packageCm: { length: number; width: number; height: number };
   mode: string;                 // incluso | tabela | melhor_envio
   table: Record<string, number>; // centavos por região
   originCep: string;
@@ -64,7 +91,7 @@ async function melhorEnvioQuote(c: ShippingConfig, cep: string): Promise<Quote> 
     body: JSON.stringify({
       from: { postal_code: c.originCep },
       to: { postal_code: cep },
-      package: { height: 4, width: 12, length: 16, weight: Math.max(0.05, c.weightGrams / 1000) },
+      package: { height: c.packageCm.height, width: c.packageCm.width, length: c.packageCm.length, weight: Math.max(0.01, c.weightGrams / 1000) },
     }),
     signal: AbortSignal.timeout(12000),
   });

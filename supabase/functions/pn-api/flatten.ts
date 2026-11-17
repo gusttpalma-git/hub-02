@@ -13,10 +13,23 @@ const WHITE: RGB = { r: 255, g: 255, b: 255 };
 const MIN_DISTANCE = 60; // abaixo disso duas cores são "o mesmo tom"
 
 const dist = (a: RGB, b: RGB) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+// distância "redmean", mais próxima da percepção — usada para casar cor com filamento
+const pdist = (a: RGB, b: RGB) => {
+  const rm = (a.r + b.r) / 2, dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
+  return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
+};
+const fromHex = (hex: string): RGB | null => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+};
 const isBlackish = (c: RGB) => Math.max(c.r, c.g, c.b) < 46;
 const isWhitish = (c: RGB) => Math.min(c.r, c.g, c.b) > 212 && Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 30;
 
-export function flattenColors(pngBytes: Uint8Array, maxColors: number): { png: Uint8Array; palette: string[] } {
+// filaments: cores disponíveis (hex). Quando informadas, a arte final usa SÓ essas cores,
+// então o cliente vê exatamente o que será impresso.
+export function flattenColors(pngBytes: Uint8Array, maxColors: number, filaments: string[] = []): { png: Uint8Array; palette: string[] } {
   const img = PNG.sync.read(Buffer.from(pngBytes));
   const { width: w, height: h, data } = img;
   const total = w * h;
@@ -76,7 +89,7 @@ export function flattenColors(pngBytes: Uint8Array, maxColors: number): { png: U
     }
 
     // funde tons parecidos (entre si, ou com o preto/branco) e descarta cores quase sem uso
-    centers = centers.filter((c) => c.w > total * 0.004 && dist(c, BLACK) >= MIN_DISTANCE * 0.7 && dist(c, WHITE) >= MIN_DISTANCE * 0.7);
+    centers = centers.filter((c) => c.w > total * 0.0007 && dist(c, BLACK) >= MIN_DISTANCE * 0.7 && dist(c, WHITE) >= MIN_DISTANCE * 0.7);
     let merged = true;
     while (merged) {
       merged = false;
@@ -102,10 +115,29 @@ export function flattenColors(pngBytes: Uint8Array, maxColors: number): { png: U
     const f = MIN_FROM_BLACK / d;
     return { r: BLACK.r + (c.r - BLACK.r) * f, g: BLACK.g + (c.g - BLACK.g) * f, b: BLACK.b + (c.b - BLACK.b) * f };
   };
-  const shown = centers.map(lift).map((c) => ({ r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) }));
+  let shown = centers.map(lift).map((c) => ({ r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) }));
+  let ink = BLACK, paper = WHITE;
+  const fil = filaments.map(fromHex).filter((c): c is RGB => !!c);
+  if (fil.length) {
+    const nearest = (c: RGB, pool = fil) => pool.reduce((a, f) => (pdist(c, f) < pdist(c, a) ? f : a));
+    ink = nearest(BLACK);
+    paper = nearest(WHITE);
+    // Cores mais usadas escolhem primeiro. Se o filamento mais próximo já foi usado,
+    // tenta o próximo livre (ex.: listras laranja-escuro → caramelo), desde que pareça.
+    const used = new Set<RGB>([ink, paper]);
+    const pick: RGB[] = new Array(centers.length);
+    centers.map((c, i) => ({ c, i })).sort((a, b) => b.c.w - a.c.w).forEach(({ c, i }) => {
+      const best = nearest(c);
+      if (!used.has(best)) { used.add(best); pick[i] = best; return; }
+      const free = fil.filter((f) => !used.has(f));
+      const alt = free.length ? nearest(c, free) : null;
+      if (alt && pdist(c, alt) < 150) { used.add(alt); pick[i] = alt; } else pick[i] = best;
+    });
+    shown = pick;
+  }
   // "palette" classifica os pixels (cores originais); "paint" é o que vai para a imagem final.
   const palette: RGB[] = [BLACK, WHITE, ...centers.map((c) => ({ r: c.r, g: c.g, b: c.b }))];
-  const paint: RGB[] = [BLACK, WHITE, ...shown];
+  const paint: RGB[] = [ink, paper, ...shown];
 
   // cada bloco do histograma → cor da paleta
   const lut = new Uint8Array(32768);

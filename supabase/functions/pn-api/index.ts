@@ -11,7 +11,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { flattenColors } from "./flatten.ts";
-import { esc, mailLayout, quoteShipping, REGIONS, sendMail } from "./extras.ts";
+import { checkRegion, esc, mailLayout, quoteShipping, REGION_LABEL, REGIONS, sendMail } from "./extras.ts";
+import { artPrompt, SPECIES } from "./prompts.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -31,18 +32,6 @@ const CORS = {
   "Access-Control-Allow-Headers": "content-type, authorization, apikey, x-client-info, x-admin-password",
   "Access-Control-Max-Age": "86400",
 };
-
-// O prompt fixa a composição: não importa a pose, o fundo ou a raça na foto,
-// o pet sai sempre de frente, dentro do aro, com as patinhas apoiadas embaixo.
-const ART_PROMPT = `Turn the pet in the photo into a minimalist flat sticker-style illustration for a round Christmas-tree ornament that will be 3D printed in FOUR filament colours.
-
-COMPOSITION (always identical, no matter how the photo looks): pure white square canvas. Centered on it, one large perfect circle drawn with a thick black ring; the inside of the circle is pure white too. The circle fills about 80% of the canvas width. The pet is shown from the chest up, facing the viewer, head centered and upright, looking straight at the camera, peeking out of the ring: both front paws rest on the lower edge of the ring and overlap it, and the tips of the ears may slightly overlap the top of the ring. Symmetrical friendly pose, mouth closed with a gentle smile.
-
-COLOURS (strict): the whole image uses AT MOST 4 flat colours: (1) pure black for every outline, the eyes and the nose; (2) pure white for the background and for white or very light fur; (3) and (4) at most two coat colours that are clearly different from each other and from black and white. Never use two similar shades of the same colour: no light brown next to mid brown, no pink inner ears, no grey shadows. Merge every similar tone into one single flat colour. For a black or very dark pet, fill the fur with one medium grey (#6B6B6B) or medium brown, clearly lighter than the black outlines, so the outlines stay visible. For an all-white pet, use white fur with black outlines and at most one accent colour.
-
-STYLE: clean vector cartoon, uniform thick black outlines, flat solid fills only, big round black eyes with one small white highlight each. Bold simple shapes, large colour areas, no hair-thin lines, no whiskers. No gradients, no shading, no highlights, no texture, no fur detail beyond a few short thick strokes, no background scene, no text, no collar, no accessories, no drop shadow.
-
-LIKENESS: keep the pet's real breed features, ear shape, main coat colours and markings so the owner recognises it instantly. Ignore the photo's background, pose, people and objects. If there is more than one animal, draw only the most prominent one.`;
 
 const DEMO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#fff"/><circle cx="512" cy="512" r="400" fill="#fff" stroke="#111" stroke-width="22"/><g fill="#C9793A" stroke="#111" stroke-width="16" stroke-linejoin="round"><path d="M300 330 250 150l170 110zM724 330l50-180-170 110z"/><ellipse cx="512" cy="500" rx="235" ry="215"/><path d="M330 880c0-150 80-230 182-230s182 80 182 230z"/></g><g fill="#fff" stroke="#111" stroke-width="16"><ellipse cx="512" cy="580" rx="110" ry="88"/><rect x="290" y="840" width="130" height="110" rx="55"/><rect x="604" y="840" width="130" height="110" rx="55"/></g><circle cx="420" cy="470" r="36" fill="#111"/><circle cx="604" cy="470" r="36" fill="#111"/><circle cx="432" cy="458" r="11" fill="#fff"/><circle cx="616" cy="458" r="11" fill="#fff"/><ellipse cx="512" cy="548" rx="34" ry="24" fill="#111"/><path d="M512 572v34m-54 4c20 30 88 30 108 0" fill="none" stroke="#111" stroke-width="14" stroke-linecap="round"/><text x="512" y="1005" text-anchor="middle" font-family="Arial" font-size="40" font-weight="700" fill="#111">ARTE DE TESTE</text></svg>`;
 
@@ -113,6 +102,45 @@ async function loadSettings(): Promise<Settings> {
   return s;
 }
 
+const DEFAULT_FILAMENTS = `Branco #F2F2EE
+Preto #161616
+Cinza #8A8D8F
+Cinza escuro #4F5356
+Marrom #6B4226
+Bege #E3C9A4
+Caramelo #C98A3E
+Laranja #E8761E
+Amarelo #F4C21C
+Rosa #F29BB2
+Vermelho #C8202F
+Verde #2F8F4E
+Azul #2D6CC0`;
+
+export function parseFilaments(raw: string | undefined): { name: string; hex: string }[] {
+  const out: { name: string; hex: string }[] = [];
+  for (const line of String(raw || DEFAULT_FILAMENTS).split(/\r?\n/)) {
+    const m = /^(.*?)[\s:;,-]*(#[0-9a-f]{6})\s*$/i.exec(line.trim());
+    if (m && m[1].trim()) out.push({ name: m[1].trim().slice(0, 30), hex: m[2].toUpperCase() });
+  }
+  return out.slice(0, 30);
+}
+
+function parseRegions(raw: string | undefined): Record<string, { on: boolean; until: string }> {
+  let parsed: Record<string, { on?: boolean; until?: string }> = {};
+  try { parsed = JSON.parse(raw || "{}"); } catch (_) { /* padrão */ }
+  const out: Record<string, { on: boolean; until: string }> = {};
+  for (const r of REGIONS) {
+    const v = parsed[r] || {};
+    out[r] = { on: v.on !== false, until: /^\d{4}-\d{2}-\d{2}$/.test(String(v.until || "")) ? String(v.until) : "" };
+  }
+  return out;
+}
+
+const num = (v: string | undefined, def: number, min: number, max: number) => {
+  const n = parseFloat(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+};
+
 function parseTable(raw: string | undefined): Record<string, number> {
   const out: Record<string, number> = {};
   let parsed: Record<string, unknown> = {};
@@ -133,12 +161,20 @@ function cfg(s: Settings) {
     testMode: s.test_mode === "true",
     maxColors: Math.min(6, Math.max(2, parseInt(s.max_colors || "4", 10) || 4)),
     adminHash: s.admin_password_hash || "",
+    filaments: parseFilaments(s.filaments),
+    model: {
+      diameter: num(s.model_diameter, 70, 40, 120),
+      base: num(s.model_base, 2.4, 1.2, 5),
+      band: num(s.model_band, 0.4, 0.2, 1.2),
+    },
     shipping: {
+      regions: parseRegions(s.regions),
+      packageCm: { length: num(s.package_length, 16, 1, 100), width: num(s.package_width, 11, 1, 100), height: num(s.package_height, 2, 1, 100) },
       mode: ["incluso", "tabela", "melhor_envio"].includes(s.shipping_mode) ? s.shipping_mode : "incluso",
       table: parseTable(s.shipping_table),
       originCep: digits(s.origin_cep),
       melhorEnvioToken: env("MELHOR_ENVIO_TOKEN") || s.melhor_envio_token || "",
-      weightGrams: Math.max(10, parseInt(s.package_weight_g || "100", 10) || 100),
+      weightGrams: Math.max(10, parseInt(s.package_weight_g || "50", 10) || 50),
       contactEmail: s.owner_email || "",
     },
     mail: {
@@ -233,7 +269,7 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
         `<strong>Pet:</strong> ${esc(order.pet_name || "—")}`,
         ...(order.customer_notes ? [`<strong>Observações do cliente:</strong> ${esc(order.customer_notes)}`] : []),
         `<strong>Entrega:</strong><br>${esc(order.recipient)}<br>${address}`,
-        "A arte está no painel, pronta para baixar em SVG.",
+        "A arte e o modelo 3D (3MF ou STLs por cor) estão no painel, prontos para baixar.",
       ]));
     }
   } else {
@@ -315,7 +351,7 @@ async function orderView(order: any) {
 
 // ───────────────────────── geração da arte ─────────────────────────
 
-async function runGeneration(genId: string, orderId: string, photo: Uint8Array, photoType: string, c: ReturnType<typeof cfg>) {
+async function runGeneration(genId: string, orderId: string, photo: Uint8Array, photoType: string, species: string, c: ReturnType<typeof cfg>) {
   try {
     let bytes: Uint8Array;
     let ext = "png";
@@ -325,7 +361,7 @@ async function runGeneration(genId: string, orderId: string, photo: Uint8Array, 
       const form = new FormData();
       form.append("model", c.imageModel);
       form.append("image[]", new Blob([photo as BlobPart], { type: photoType }), photoType === "image/png" ? "pet.png" : "pet.jpg");
-      form.append("prompt", ART_PROMPT);
+      form.append("prompt", artPrompt(species, c.maxColors, c.filaments.map((f) => f.name)));
       form.append("size", "1024x1024");
       form.append("quality", c.imageQuality);
       form.append("n", "1");
@@ -343,7 +379,7 @@ async function runGeneration(genId: string, orderId: string, photo: Uint8Array, 
       bytes = b64ToBytes(b64);
       // Garante o limite de cores da impressão: o cliente escolhe vendo o resultado final.
       try {
-        bytes = flattenColors(bytes, c.maxColors).png;
+        bytes = flattenColors(bytes, c.maxColors, c.filaments.map((f) => f.hex)).png;
       } catch (err) {
         console.error("redução de cores falhou; mantendo a arte original", err);
       }
@@ -383,6 +419,9 @@ async function publicConfig() {
     sales_open: c.testMode || !!c.mpToken,
     shipping_mode: c.shipping.mode === "incluso" ? "incluso" : "calculado",
     store: c.store,
+    model: c.model,
+    filaments: c.filaments,
+    regions: REGIONS.map((r) => ({ id: r, label: REGION_LABEL[r], on: c.shipping.regions[r].on, until: c.shipping.regions[r].until })),
   });
 }
 
@@ -401,6 +440,11 @@ async function quote(b: Body) {
   const c = cfg(await loadSettings());
   const cep = digits(b.cep);
   if (cep.length !== 8) throw new HttpError(400, "Confira o CEP (8 números).");
+  try {
+    checkRegion(c.shipping, cep);
+  } catch (err) {
+    throw new HttpError(400, (err as Error).message);
+  }
   try {
     const q = await quoteShipping(c.shipping, cep);
     return json({ shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, total_cents: c.priceCents + q.cents });
@@ -434,8 +478,13 @@ async function checkout(b: Body) {
   // O frete é sempre recalculado aqui: o valor cobrado nunca vem do navegador.
   let shipping = { cents: 0, label: "Frete incluso" };
   const cep = digits(b.cep);
+  if (cep.length !== 8) throw new HttpError(400, "Digite o CEP de entrega (8 números).");
+  try {
+    checkRegion(c.shipping, cep);
+  } catch (err) {
+    throw new HttpError(400, (err as Error).message);
+  }
   if (c.shipping.mode !== "incluso") {
-    if (cep.length !== 8) throw new HttpError(400, "Digite o CEP de entrega (8 números).");
     try {
       shipping = await quoteShipping(c.shipping, cep);
     } catch (_) {
@@ -454,7 +503,7 @@ async function checkout(b: Body) {
     amount_cents: totalCents,
     shipping_cents: shipping.cents,
     shipping_label: shipping.label,
-    ...(shipping.cents > 0 ? { cep } : {}),
+    cep,
     site_url: base,
     credits_total: c.credits,
     is_test: c.testMode,
@@ -544,6 +593,8 @@ async function generate(req: Request) {
 
   const c = cfg(await loadSettings());
   if (!c.openaiKey && !c.testMode) throw new HttpError(503, "A criação de artes está temporariamente indisponível.");
+  const species = String(form.get("species") || "");
+  if (!(SPECIES as readonly string[]).includes(species)) throw new HttpError(400, "Escolha qual é o seu pet: gato, cachorro, ave ou roedor.");
 
   await expireStaleGenerations(order.id);
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
@@ -558,7 +609,8 @@ async function generate(req: Request) {
     throw new HttpError(409, "Você já usou todas as suas tentativas, ou uma arte ainda está sendo criada.");
   }
 
-  const task = runGeneration(genId, order.id, photo, file.type, c);
+  await db.from("pn_generations").update({ species }).eq("id", genId);
+  const task = runGeneration(genId, order.id, photo, file.type, species, c);
   if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(task);
   else await task;
 
@@ -603,6 +655,11 @@ async function confirm(b: Body) {
   if (!a.district) throw new HttpError(400, "Digite o bairro.");
   if (!a.city) throw new HttpError(400, "Digite a cidade.");
   if (!/^[A-Z]{2}$/.test(a.state)) throw new HttpError(400, "Escolha o estado.");
+  try {
+    checkRegion(cfg(await loadSettings()).shipping, a.cep, false);
+  } catch (err) {
+    throw new HttpError(400, (err as Error).message);
+  }
 
   await db.from("pn_orders")
     .update({ ...a, confirmed_at: order.confirmed_at ?? new Date().toISOString() })
@@ -664,6 +721,11 @@ function settingsView(s: Settings) {
     email_from: c.mail.from,
     owner_email: c.ownerEmail,
     store: c.store,
+    filaments_text: c.filaments.map((f) => `${f.name} ${f.hex}`).join("\n"),
+    filaments: c.filaments,
+    model: c.model,
+    regions: c.shipping.regions,
+    package_cm: c.shipping.packageCm,
     webhook_url: `${FUNCTION_URL}?action=mp-webhook`,
   };
 }
@@ -676,7 +738,7 @@ async function adminOrders(b: Body) {
 
   const ids = (orders ?? []).map((o) => o.id);
   const { data: gens } = ids.length
-    ? await db.from("pn_generations").select("id, order_id, status, source_path, result_path, created_at").in("order_id", ids).order("created_at")
+    ? await db.from("pn_generations").select("id, order_id, status, species, source_path, result_path, created_at").in("order_id", ids).order("created_at")
     : { data: [] };
   const urls = await signedUrls((gens ?? []).flatMap((g) => [g.source_path, g.result_path]));
 
@@ -693,7 +755,7 @@ async function adminOrders(b: Body) {
       customer_notes: o.customer_notes,
       chosen_generation: o.chosen_generation,
       generations: (gens ?? []).filter((g) => g.order_id === o.id).map((g) => ({
-        id: g.id, status: g.status,
+        id: g.id, status: g.status, species: g.species,
         photo_url: urls[g.source_path] ?? null,
         art_url: g.result_path ? urls[g.result_path] ?? null : null,
       })),
@@ -776,6 +838,25 @@ async function adminSaveSettings(b: Body) {
       if (w && w.length <= 11) w = "55" + w;
       if (w && (w.length < 12 || w.length > 13)) throw new HttpError(400, "WhatsApp inválido. Use DDD + número.");
       await saveSetting("store_whatsapp", w);
+    }
+  }
+  if (typeof b.filaments === "string") {
+    const list = parseFilaments(b.filaments);
+    if (list.length < 2) throw new HttpError(400, "Cadastre pelo menos 2 filamentos (um por linha: Nome #RRGGBB).");
+    await saveSetting("filaments", list.map((f) => `${f.name} ${f.hex}`).join("\n"));
+  }
+  if (b.regions && typeof b.regions === "object") {
+    await saveSetting("regions", JSON.stringify(parseRegions(JSON.stringify(b.regions))));
+  }
+  if (b.model && typeof b.model === "object") {
+    const m = b.model;
+    if (m.diameter !== undefined) await saveSetting("model_diameter", String(num(m.diameter, 70, 40, 120)));
+    if (m.base !== undefined) await saveSetting("model_base", String(num(m.base, 2.4, 1.2, 5)));
+    if (m.band !== undefined) await saveSetting("model_band", String(num(m.band, 0.4, 0.2, 1.2)));
+  }
+  if (b.package_cm && typeof b.package_cm === "object") {
+    for (const k of ["length", "width", "height"]) {
+      if (b.package_cm[k] !== undefined) await saveSetting("package_" + k, String(num(b.package_cm[k], 2, 1, 100)));
     }
   }
   if (typeof b.mp_access_token === "string" && b.mp_access_token.trim()) await saveSetting("mp_access_token", b.mp_access_token.trim());

@@ -10,6 +10,9 @@
     photoUrl: null,
     mode: "idle",       // idle | pick | preview | working
     step: "studio",     // studio | address
+    species: null,      // gato | cachorro | ave | roedor
+    viewer: null,
+    viewerFor: null,
     watching: null,     // id da geração em andamento
     uploading: false,
     timer: null,
@@ -32,6 +35,8 @@
   const chosenArt = () => state.order.generations.find((g) => g.id === state.order.chosen_generation);
 
   // ───────── carregar pedido ─────────
+
+  try { state.species = localStorage.getItem("pn_species_" + state.token) || null; } catch (_) { /* modo privado */ }
 
   async function load() {
     if (!state.token) return show("login");
@@ -173,8 +178,18 @@
     $("#next-block").hidden = noArts || state.mode !== "idle";
 
     const picked = chosenArt();
-    $("#mockup-block").hidden = !picked;
-    if (picked) $("#mockup-art").src = picked.url;
+    $("#viewer-block").hidden = !picked || state.mode !== "idle";
+    if (picked && state.mode === "idle") show3D(picked);
+
+    // tipo de pet: aparece enquanto a pessoa escolhe ou confere a foto
+    $("#species-block").hidden = !(picking || state.mode === "preview");
+    document.querySelectorAll("[data-species]").forEach((b) => {
+      const on = b.dataset.species === state.species;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    $("#drop").classList.toggle("locked", !state.species);
+    $("#drop-label").textContent = state.species ? "Toque para escolher a foto" : "Primeiro, escolha o tipo de pet acima";
 
     const go = $("#go-address");
     go.disabled = !o.chosen_generation;
@@ -351,15 +366,51 @@
     }
   }
 
+  // ───────── prévia 3D ─────────
+
+  async function show3D(art) {
+    if (state.viewerFor === art.id || !window.PN3D) return;
+    state.viewerFor = art.id;
+    const box = $("#viewer");
+    if (state.viewer) { state.viewer.destroy(); state.viewer = null; }
+    box.innerHTML = '<div class="loading"><div class="spinner dark"></div>Montando a prévia…</div>';
+    try {
+      const c = (await PN.ready) || {};
+      const model = await PN3D.build(art.url, {
+        diameter: (c.model && c.model.diameter) || 70,
+        base: c.model && c.model.base,
+        band: c.model && c.model.band,
+        filaments: c.filaments || [],
+        brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
+        petName: state.order.pet_name || "",
+      });
+      if (state.viewerFor !== art.id) return;
+      state.viewer = await PN3D.view(box, model, { spin: true });
+    } catch (err) {
+      // sem WebGL ou arte inacessível: mostra a foto do enfeite com a arte aplicada
+      console.warn("prévia 3D indisponível", err);
+      box.innerHTML = "";
+      const m = document.createElement("div");
+      m.className = "mockup";
+      m.style.width = "100%";
+      const img = document.createElement("img");
+      img.src = art.url;
+      img.alt = "Sua arte aplicada no enfeite";
+      m.appendChild(img);
+      box.appendChild(m);
+    }
+  }
+
   async function create() {
     if (!state.photo || state.mode === "working") return;
+    if (!state.species) { setError("#studio-error", "Toque no tipo do seu pet: gato, cachorro, ave ou roedor."); return; }
     setError("#studio-error", "");
     state.mode = "working";
     state.uploading = true;
     renderStudio();
     startBar(true);
     try {
-      const out = await PN.upload(state.token, state.photo);
+      const out = await PN.upload(state.token, state.photo, state.species);
       state.watching = out.generation_id;
       state.uploading = false;
       schedule(2500);
@@ -392,6 +443,17 @@
 
   $("#file").addEventListener("change", (e) => { onFile(e.target.files[0]); e.target.value = ""; });
   const drop = $("#drop");
+  drop.addEventListener("click", (e) => {
+    if (state.species) return;
+    e.preventDefault();
+    setError("#studio-error", "Primeiro, toque no tipo do seu pet: gato, cachorro, ave ou roedor.");
+  });
+  document.querySelectorAll("[data-species]").forEach((b) => b.addEventListener("click", () => {
+    state.species = b.dataset.species;
+    try { localStorage.setItem("pn_species_" + state.token, state.species); } catch (_) { /* modo privado */ }
+    setError("#studio-error", "");
+    renderStudio();
+  }));
   ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
   ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", (e) => onFile(e.dataTransfer.files[0]));

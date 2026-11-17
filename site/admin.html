@@ -8,7 +8,7 @@
   <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <style>
     body { font-size: 17px; }
@@ -51,6 +51,15 @@
     .state.ok { color: var(--green); }
     .state.no { color: var(--red); }
     code.copy { display: block; background: var(--cream); border: 2px dashed var(--line); border-radius: 12px; padding: 10px 12px; overflow-wrap: anywhere; font-size: 0.88rem; }
+    .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .regions { display: grid; gap: 8px; }
+    .region { display: grid; grid-template-columns: 26px 1fr 160px; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-weight: 700; }
+    .region input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--pine); }
+    .region input[type=date] { min-height: 44px; padding: 6px 10px; border: 2px solid #d9cdb8; border-radius: 10px; font: 600 1rem var(--font-body); }
+    .swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 16px; }
+    .swatches span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border: 1px solid var(--line); border-radius: 99px; font-size: 0.85rem; font-weight: 700; }
+    .swatches i { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
+    .layers { font-size: 0.85rem; color: var(--muted); margin: 4px 0 0; line-height: 1.45; }
     @media (min-width: 860px) {
       .order { grid-template-columns: 240px 1fr 300px; }
       .settings { grid-template-columns: 1fr 1fr; }
@@ -137,6 +146,28 @@
           <label class="field"><span>ID da tag do Google</span><input name="st_google_tag_id" maxlength="40" placeholder="G-XXXXXXX ou AW-XXXXXXX"></label>
         </div>
         <div class="card">
+          <h3>Regiões atendidas e prazos</h3>
+          <p class="small muted">Desmarque as regiões onde não quer entregar. A data é o último dia para pedir (para chegar antes do Natal); deixe vazia para não ter limite. O CEP é conferido antes do pagamento.</p>
+          <div class="regions" id="regions">
+            <label class="region"><input type="checkbox" name="rg_on_sudeste"> <b>Sudeste</b><input type="date" name="rg_until_sudeste"></label>
+            <label class="region"><input type="checkbox" name="rg_on_sul"> <b>Sul</b><input type="date" name="rg_until_sul"></label>
+            <label class="region"><input type="checkbox" name="rg_on_centro_oeste"> <b>Centro-Oeste</b><input type="date" name="rg_until_centro_oeste"></label>
+            <label class="region"><input type="checkbox" name="rg_on_nordeste"> <b>Nordeste</b><input type="date" name="rg_until_nordeste"></label>
+            <label class="region"><input type="checkbox" name="rg_on_norte"> <b>Norte</b><input type="date" name="rg_until_norte"></label>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Filamentos e peça 3D</h3>
+          <p class="small muted">A arte que o cliente vê já usa só estas cores. Uma por linha: <code>Nome #RRGGBB</code>. Cadastre só as cores que você tem.</p>
+          <label class="field"><span>Filamentos disponíveis</span><textarea name="filaments" rows="8" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:1rem"></textarea></label>
+          <div class="swatches" id="swatches"></div>
+          <div class="row3">
+            <label class="field"><span>Diâmetro (mm)</span><input name="model_diameter" inputmode="decimal"></label>
+            <label class="field"><span>Base (mm)</span><input name="model_base" inputmode="decimal"></label>
+            <label class="field"><span>Relevo por cor (mm)</span><input name="model_band" inputmode="decimal"></label>
+          </div>
+        </div>
+        <div class="card">
           <h3>Frete</h3>
           <label class="field"><span>Como cobrar o frete</span>
             <select name="shipping_mode">
@@ -160,6 +191,12 @@
             <div class="row2">
               <label class="field"><span>CEP de onde você envia</span><input name="origin_cep" inputmode="numeric" placeholder="00000-000"></label>
               <label class="field"><span>Peso do pacote (g)</span><input name="package_weight_g" type="number" min="10" max="30000"></label>
+            </div>
+            <p class="small muted" style="margin:0 0 8px">Embalagem (cm). Para o Mini Envios dos Correios: até 24 × 16 × 4 cm e 300 g.</p>
+            <div class="row3">
+              <label class="field"><span>Comprimento</span><input name="pk_length" inputmode="decimal"></label>
+              <label class="field"><span>Largura</span><input name="pk_width" inputmode="decimal"></label>
+              <label class="field"><span>Altura</span><input name="pk_height" inputmode="decimal"></label>
             </div>
           </div>
         </div>
@@ -185,6 +222,8 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/vendor/imagetracer.js"></script>
+  <script src="js/vendor/earcut.min.js"></script>
+  <script src="js/ornament3d.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

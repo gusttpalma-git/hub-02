@@ -70,10 +70,24 @@ de exemplo. **Desligue o modo de teste antes de divulgar o site.**
 - **Anúncios**: preencha `META_PIXEL_ID` e/ou `GOOGLE_TAG_ID` em `site/js/config.js` para o site
   registrar início de compra e venda concluída.
 
+### Peça 3D, cores e regiões (também pelo painel)
+
+- **Filamentos**: cadastre só as cores que você tem (`Nome #RRGGBB`). A IA é orientada por elas e a arte
+  final é reduzida a essas cores exatas (até 4 por padrão), então o cliente já vê o que será impresso.
+- **Tipo de pet**: o cliente escolhe gato, cachorro, ave ou roedor antes da foto; cada um tem um prompt
+  próprio (ex.: gato mantém a cor real dos olhos e o nariz rosa).
+- **Modelo 3D**: no pedido, "Modelo 3D (3MF)" ou "STLs por cor (.zip)". Base branca com alça e furo,
+  nome do pet e marca gravados no fundo (espelhados, virados para a mesa), e cada cor em relevo numa
+  faixa de altura própria — uma cor por camada, poucas trocas de filamento. O zip traz um LEIA-ME com as
+  alturas de troca. Diâmetro, base e relevo por cor ficam em Configurações.
+- **Regiões**: desmarque as regiões que não atende e defina o último dia para pedir em cada uma.
+  O CEP é conferido antes do pagamento.
+- **Embalagem**: 16 × 11 × 2 cm e 50 g por padrão, dentro do Mini Envios dos Correios.
+
 ## Dia a dia
 
 1. O pedido aparece em **Para produzir** quando o cliente escolhe a arte e confirma o endereço.
-2. **Baixar SVG** vetoriza a arte nas mesmas cores chapadas que o cliente viu (4 por padrão) para importar no fatiador.
+2. **Modelo 3D (3MF)** ou **STLs por cor** gera a peça pronta para o fatiador; SVG e PNG continuam disponíveis.
 3. Mude a situação para **Em produção** → **Enviado** e cole o código de rastreio. O cliente vê tudo em `criar.html`.
 4. Se o cliente não gostou de nenhuma arte, use **+1 tentativa de arte** no pedido.
 

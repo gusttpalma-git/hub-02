@@ -21,23 +21,45 @@
     $("#testbar").hidden = !c.test_mode;
     state.price = c.price_cents;
     state.calcShipping = c.shipping_mode === "calculado";
-    $("#cep-block").hidden = !state.calcShipping;
+    renderDeadlines(c.regions || []);
     document.querySelectorAll("[data-frete]").forEach((el) => { el.textContent = state.calcShipping ? "+ frete para o seu CEP" : "frete incluso"; });
   }).catch(() => { /* mantém os valores padrão do HTML */ });
 
-  // Frete: calculado no servidor assim que o CEP fica completo.
-  const state = { price: 4990, calcShipping: false, quotedCep: "" };
+  // Últimos dias para pedir, por região (definidos no painel).
+  function renderDeadlines(regions) {
+    const list = $("#deadline-list");
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    const fmt = (d) => d.split("-").reverse().slice(0, 2).join("/");
+    const rows = regions.filter((r) => !r.on || r.until);
+    list.replaceChildren(...rows.map((r) => {
+      const li = document.createElement("li");
+      const a = document.createElement("span");
+      const b = document.createElement("span");
+      a.textContent = r.label;
+      if (!r.on) { li.className = "off"; b.textContent = "não entregamos"; }
+      else if (r.until < today) { li.className = "closed"; b.textContent = "encerrado"; }
+      else b.textContent = "até " + fmt(r.until);
+      li.append(a, b);
+      return li;
+    }));
+    $("#deadlines").hidden = !rows.length;
+  }
+
+  // Frete e região: conferidos no servidor assim que o CEP fica completo.
+  const state = { price: 4990, calcShipping: false, quotedCep: "", cepError: "" };
   form.cep.addEventListener("input", async (e) => {
     e.target.value = PN.maskCep(e.target.value);
     const cep = e.target.value.replace(/\D/g, "");
     const status = $("#quote-status");
-    if (cep.length !== 8) { $("#totals").hidden = true; status.textContent = ""; state.quotedCep = ""; return; }
-    status.textContent = "Calculando o frete…";
+    if (cep.length !== 8) { $("#totals").hidden = true; status.textContent = ""; state.quotedCep = ""; state.cepError = ""; return; }
+    status.textContent = state.calcShipping ? "Calculando o frete…" : "Conferindo o CEP…";
     try {
       const q = await PN.api("quote", { cep });
       if (form.cep.value.replace(/\D/g, "") !== cep) return;
       state.quotedCep = cep;
-      status.textContent = "";
+      state.cepError = "";
+      status.textContent = state.calcShipping ? "" : "✓ Entregamos no seu endereço. Frete incluso.";
+      if (!state.calcShipping) return;
       $("#quote-label").textContent = q.days ? "· cerca de " + q.days + " dias úteis" : "";
       $("#quote-shipping").textContent = q.shipping_cents ? PN.money(q.shipping_cents) : "Grátis";
       $("#quote-total").textContent = PN.money(q.total_cents);
@@ -45,6 +67,7 @@
       $("#totals").hidden = false;
     } catch (err) {
       $("#totals").hidden = true;
+      state.cepError = err.message;
       status.textContent = err.message;
     }
   });
@@ -77,7 +100,8 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) { form.email.focus(); return showError(errorBox, "Confira seu e-mail."); }
     if (data.whatsapp.replace(/\D/g, "").length < 10) { form.whatsapp.focus(); return showError(errorBox, "Confira seu WhatsApp com DDD."); }
 
-    if (state.calcShipping && data.cep.replace(/\D/g, "").length !== 8) { form.cep.focus(); return showError(errorBox, "Digite o CEP de entrega para calcularmos o frete."); }
+    if (data.cep.replace(/\D/g, "").length !== 8) { form.cep.focus(); return showError(errorBox, "Digite o CEP de entrega."); }
+    if (state.cepError) { form.cep.focus(); return showError(errorBox, state.cepError); }
 
     btn.disabled = true;
     btn.textContent = "Abrindo o pagamento…";
