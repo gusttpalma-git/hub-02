@@ -1,7 +1,9 @@
 // Estúdio do cliente: foto → artes → escolha → endereço → acompanhamento.
 (function () {
   const $ = (s) => document.querySelector(s);
-  const views = ["loading", "login", "pending", "studio", "extras", "address", "done"];
+  const views = ["loading", "login", "pending", "studio", "upsell", "extras", "address", "done"];
+  // Voltou do pagamento de um enfeite adicional (Mercado Pago → criar.html?…&mais=1)?
+  const fromUpsell = new URLSearchParams(location.search).has("mais");
 
   const state = {
     token: PN.getToken(),
@@ -9,7 +11,9 @@
     photo: null,        // Blob já reduzido, pronto para enviar
     photoUrl: null,
     mode: "idle",       // idle | pick | preview | working
-    step: "studio",     // studio | extras | address
+    step: "studio",     // studio | upsell | extras | address
+    upsellReturn: fromUpsell,
+    upQty: 1,
     item: 0,            // enfeite em que a pessoa está trabalhando (0 = principal, 1..3 = adicionais)
     nameViewer: null,
     species: null,      // gato | cachorro | ave | roedor
@@ -172,8 +176,14 @@
       return setError("#login-error", "Este pedido foi cancelado e o valor devolvido. Fale com a gente se precisar de ajuda.");
     }
     trackPurchase(o);
+    if (state.upsellReturn) {
+      if (pendingExtras().length) { state.upsellReturn = false; state.step = "extras"; state.item = 0; }
+      else if (o.upsell && o.upsell.pending && !o.confirmed) state.step = "upsell";
+      else state.upsellReturn = false;
+    }
     if (o.confirmed && state.step !== "address") return renderDone();
     if (state.step === "address") return renderAddress();
+    if (state.step === "upsell") return renderUpsell();
     if (state.step === "extras") return renderExtras();
     renderStudio();
   }
@@ -292,6 +302,7 @@
       ? "Você já criou todas as suas artes. Escolha a preferida para continuar."
       : "Quer ver outra opção?";
     if (autoChoose) choose(autoChoose);
+    maybeWelcome();
   }
 
   // Enfeites adicionais: para cada um, "outro pet" (cria a arte) ou "mais um igual".
@@ -361,10 +372,45 @@
     }
   }
 
-  // Depois de escolher a arte: adicionais pendentes → tela dos adicionais; senão → endereço.
+  // Depois de escolher a arte: adicionais → tela dos adicionais; senão oferta de mais enfeites
+  // (uma vez só) → endereço.
+  const upKey = () => "pn_up_" + state.order.code;
+  function offerUpsell() {
+    const u = state.order.upsell;
+    if (!u || !(u.max > 0) || !(u.price_cents > 0)) return false;
+    try { return !localStorage.getItem(upKey()); } catch (_) { return true; }
+  }
   function nextStep() {
-    state.step = itemsOf(state.order).length ? "extras" : "address";
+    state.step = itemsOf(state.order).length ? "extras" : offerUpsell() ? "upsell" : "address";
     render();
+    window.scrollTo(0, 0);
+  }
+
+  // Oferta no fim da criação: mais enfeites (outro pet ou mais um igual) no mesmo pacote.
+  function renderUpsell() {
+    const o = state.order;
+    const u = o.upsell || { max: 0, price_cents: 0 };
+    show("upsell");
+    const art = genById(o.chosen_generation);
+    ["#up-art1", "#up-art2"].forEach((id) => { $(id).src = art && art.url ? art.url : "img/exemplo-4-arte.png"; });
+    state.upQty = Math.max(1, Math.min(state.upQty, u.max || 1));
+    $("#up-price").textContent = PN.money(u.price_cents);
+    $("#up-stepper").hidden = u.max <= 1;
+    $("#up-qty").textContent = state.upQty;
+    $("#up-minus").disabled = state.upQty <= 1;
+    $("#up-plus").disabled = state.upQty >= u.max;
+    $("#up-yes").textContent = `Quero mais ${state.upQty} · ${PN.money(state.upQty * u.price_cents)}`;
+    const waiting = state.upsellReturn && u.pending;
+    $("#up-offer").hidden = waiting;
+    $("#up-waiting").hidden = !waiting;
+    if (waiting) schedule(4000);
+  }
+  function skipUpsell() {
+    try { localStorage.setItem(upKey(), "1"); } catch (_) { /* modo privado */ }
+    state.upsellReturn = false;
+    state.step = "address";
+    render();
+    window.scrollTo(0, 0);
   }
 
   // Nomes no verso: um campo por enfeite, com a prévia 3D mostrando o verso.
@@ -530,15 +576,51 @@
 
   // ───────── dicas de foto ─────────
 
-  const tips = $("#tips");
-  function openTips() {
-    const left = state.order ? cur().credits_left : 0;
-    $("#tips-left").textContent = left > 0
-      ? (left === 1 ? "Você ainda tem 1 tentativa." : "Você ainda tem " + left + " tentativas.") + " Se a arte não ficou parecida, tente com uma foto assim:"
-      : "Para a arte ficar parecida com o seu pet, a foto ideal é assim:";
-    if (!tips.open) tips.showModal();
+  // Boas-vindas com as dicas da foto: 3 telas curtas, fácil de pular (Pular, Esc, fora, arrastar).
+  const onb = $("#onb");
+  const slides = [...onb.querySelectorAll(".onb-slide")];
+  const dots = [...onb.querySelectorAll(".onb-dots i")];
+  let onbAt = 0;
+  function onbGo(i) {
+    onbAt = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((el, k) => { el.classList.toggle("on", k === onbAt); el.classList.toggle("past", k < onbAt); });
+    dots.forEach((el, k) => el.classList.toggle("on", k === onbAt));
+    $("#onb-count").textContent = onbAt + 1 + " de " + slides.length;
+    $("#onb-next").textContent = onbAt === slides.length - 1 ? "Vamos lá! 📸" : "Próximo →";
   }
-  // Aparece sozinho, uma única vez, quando o cliente já gastou 2 artes e ainda tem outras.
+  function openTips(note) {
+    onb.querySelectorAll("[data-onb-credits]").forEach((el) => { el.textContent = state.order ? cur().credits_total : 4; });
+    const msg = typeof note === "string" ? note : "";
+    $("#onb-note").textContent = msg;
+    $("#onb-note").hidden = !msg;
+    onbGo(0);
+    if (!onb.open) onb.showModal();
+  }
+  function closeTips() { if (onb.open) onb.close(); }
+  $("#onb-next").addEventListener("click", () => (onbAt === slides.length - 1 ? closeTips() : onbGo(onbAt + 1)));
+  onb.querySelectorAll("[data-onb-close]").forEach((b) => b.addEventListener("click", closeTips));
+  onb.addEventListener("click", (e) => { if (e.target === onb) closeTips(); });   // toque fora do cartão
+  let onbX = null;
+  onb.addEventListener("touchstart", (e) => { onbX = e.touches[0].clientX; }, { passive: true });
+  onb.addEventListener("touchend", (e) => {
+    if (onbX === null) return;
+    const dx = e.changedTouches[0].clientX - onbX;
+    onbX = null;
+    if (Math.abs(dx) < 50) return;
+    if (dx < 0) { if (onbAt === slides.length - 1) closeTips(); else onbGo(onbAt + 1); } else onbGo(onbAt - 1);
+  });
+  // Na primeira vez que a pessoa entra para enviar a foto.
+  function maybeWelcome() {
+    const o = state.order;
+    if (state.item !== 0 || o.generations.length) return;
+    const key = "pn_onb_" + o.code;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch (_) { /* modo privado: mostra mesmo assim */ }
+    openTips();
+  }
+  // Lembrete, uma única vez, quando o cliente já gastou 2 artes e ainda tem outras.
   function maybeShowTips() {
     const o = state.order;
     const c = cur();
@@ -548,10 +630,9 @@
     try { seen = !!localStorage.getItem(key); } catch (_) { /* modo privado */ }
     if (used < 2 || c.credits_left === 0 || seen) return;
     try { localStorage.setItem(key, "1"); } catch (_) { /* modo privado */ }
-    openTips();
+    openTips((c.credits_left === 1 ? "Você ainda tem 1 tentativa." : "Você ainda tem " + c.credits_left + " tentativas.") + " A arte fica mais parecida com uma foto assim:");
   }
-  tips.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => tips.close()));
-  $("#open-tips").addEventListener("click", openTips);
+  $("#open-tips").addEventListener("click", () => openTips());
 
   // ───────── ações ─────────
 
@@ -716,6 +797,29 @@
   $("#back-extras").addEventListener("click", () => { state.item = 0; state.step = "extras"; state.photo = null; render(); });
   $("#extras-next").addEventListener("click", () => { state.step = "address"; render(); });
   $("#extras-back").addEventListener("click", () => { state.item = 0; state.step = "studio"; render(); });
+  $("#up-minus").addEventListener("click", () => { state.upQty--; renderUpsell(); });
+  $("#up-plus").addEventListener("click", () => { state.upQty++; renderUpsell(); });
+  $("#up-no").addEventListener("click", skipUpsell);
+  $("#up-skip").addEventListener("click", skipUpsell);
+  $("#up-retry").addEventListener("click", () => { state.upsellReturn = false; renderUpsell(); });
+  $("#up-yes").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    setError("#upsell-error", "");
+    b.disabled = true;
+    try {
+      const out = await PN.api("add-extras", { token: state.token, qty: state.upQty });
+      if (out.redirect) { location.href = out.redirect; return; }
+      state.order = out.order;      // pedido de teste: entra na hora
+      state.item = 0;
+      state.step = "extras";
+      render();
+      window.scrollTo(0, 0);
+    } catch (err) {
+      setError("#upsell-error", err.message);
+    } finally {
+      b.disabled = false;
+    }
+  });
   $("#edit-address").addEventListener("click", () => { delete $("#address-form").dataset.filled; state.step = "address"; render(); });
 
   // endereço

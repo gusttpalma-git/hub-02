@@ -118,13 +118,12 @@
         </div>
         <div class="card">
           <h3>Enfeites adicionais</h3>
-          <p class="small muted">O cliente pode pedir até 3 a mais no mesmo pedido (outro pet ou mais um igual). Deixe em branco para oferecer menos.</p>
+          <p class="small muted">Oferecidos no fim da criação, depois que o cliente escolhe a arte (outro pet ou mais um igual, no mesmo pacote). Coloque 0 no máximo para não oferecer.</p>
           <div class="row3">
-            <label class="field"><span>2º enfeite (R$)</span><input name="extra_0" inputmode="decimal"></label>
-            <label class="field"><span>3º enfeite (R$)</span><input name="extra_1" inputmode="decimal"></label>
-            <label class="field"><span>4º enfeite (R$)</span><input name="extra_2" inputmode="decimal"></label>
+            <label class="field"><span>Preço de cada (R$)</span><input name="extra_price" inputmode="decimal"></label>
+            <label class="field"><span>Máximo por pedido</span><input name="extra_max" type="number" min="0" max="3"></label>
+            <label class="field"><span>Tentativas por pet</span><input name="extra_credits" type="number" min="1" max="10"></label>
           </div>
-          <label class="field"><span>Tentativas de arte por pet adicional</span><input name="extra_credits" type="number" min="1" max="10"></label>
         </div>
         <div class="card">
           <h3>Retirada</h3>
@@ -194,10 +193,15 @@
           <h3>Frete</h3>
           <label class="field"><span>Como cobrar o frete</span>
             <select name="shipping_mode">
-              <option value="incluso">Frete incluso no preço (não cobra à parte)</option>
+              <option value="gratis_ate">Frete grátis até um valor (acima disso o cliente paga a diferença)</option>
+              <option value="incluso">Frete grátis sempre (não cobra à parte)</option>
               <option value="tabela">Valor fixo por região do Brasil</option>
               <option value="melhor_envio">Cálculo automático pelo CEP (Melhor Envio)</option>
             </select></label>
+          <div id="ship-free">
+            <label class="field"><span>A loja paga o frete até (R$)</span><input name="free_up_to" inputmode="decimal"></label>
+            <p class="small muted" style="margin:-6px 0 12px">O frete real é cotado no Melhor Envio. Se passar deste valor, o cliente paga só a diferença. Sem o token, todo frete sai grátis.</p>
+          </div>
           <div id="ship-table">
             <p class="small muted" style="margin:0 0 8px">Valor por região (R$). No cálculo automático, estes valores só são usados se a cotação falhar.</p>
             <div class="row2">

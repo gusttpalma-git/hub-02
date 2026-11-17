@@ -62,7 +62,12 @@ de exemplo. **Desligue o modo de teste antes de divulgar o site.**
 
 ### Frete, e-mails e anúncios (opcionais, também pelo painel)
 
-- **Frete**: em Configurações escolha "incluso", "valor fixo por região" ou "cálculo automático pelo CEP".
+- **Frete grátis até um valor** (padrão): o site cota o frete real no Melhor Envio e a loja paga até
+  o limite definido no painel (ex.: R$ 20). Se passar disso, o cliente paga só a diferença, mostrada
+  antes do pagamento. Sem token do Melhor Envio, todo frete sai grátis.
+- **Enfeites adicionais**: oferecidos no fim da criação, depois da escolha da arte (preço único,
+  até 3). São cobrados num segundo pagamento rápido do Mercado Pago e entram no mesmo pedido.
+- **Frete (outros modos)**: em Configurações também dá para escolher "grátis sempre", "valor fixo por região" ou "cálculo automático pelo CEP".
   O automático usa o Melhor Envio (conta grátis; token com permissão de calcular fretes) e cai na
   tabela por região se a cotação falhar. Com frete cobrado, o cliente informa o CEP antes de pagar.
 - **E-mails**: com uma API Key do Resend e um remetente de domínio validado, o cliente recebe o link do

@@ -39,10 +39,12 @@
           <div class="offer">
             <div class="price">
               <strong data-price>R$ 49,90</strong>
-              <span><span data-frete>frete incluso</span> · Pix ou cartão</span>
+              <span>Pix ou cartão</span>
             </div>
             <a class="btn" href="#comprar">Quero o enfeite do meu pet</a>
           </div>
+          <p class="free-ship"><span aria-hidden="true">🚚</span> <b data-frete>Frete grátis</b> <span data-frete-sub>para quase todo o Brasil</span></p>
+          <p class="pay-then">🔒 Pague com segurança e <b>envie a foto logo em seguida</b>, aqui mesmo no site.</p>
           <ul class="trust">
             <li>Você aprova a arte antes</li>
             <li><span data-credits>4</span> artes para escolher</li>
@@ -100,6 +102,27 @@
             <p>Escolha a arte preferida, veja como fica em 3D e informe o endereço.</p>
           </li>
         </ol>
+      </div>
+    </section>
+
+    <!-- vídeo da criação -->
+    <section id="video">
+      <div class="wrap video-grid">
+        <div class="phone">
+          <video id="demo-video" src="video/criacao.mp4" poster="video/criacao.jpg" muted loop playsinline preload="none" aria-label="Gravação da tela: a foto do gato vira arte e depois enfeite 3D"></video>
+          <button class="video-play" type="button" id="video-play" aria-label="Assistir">▶</button>
+        </div>
+        <div class="video-copy">
+          <p class="eyebrow">Veja como é</p>
+          <h2>Da foto à arte em 1 minuto</h2>
+          <ol class="video-steps">
+            <li><b>Pague com segurança</b> pelo Mercado Pago.</li>
+            <li><b>Você volta para o site</b> e escolhe gato, cachorro, ave ou roedor.</li>
+            <li><b>Envia a foto</b> e a arte fica pronta em cerca de 1 minuto.</li>
+            <li><b>Escolhe a preferida</b> e vê o enfeite em 3D, com o nome atrás.</li>
+          </ol>
+          <a class="btn" href="#comprar">Quero o meu</a>
+        </div>
       </div>
     </section>
 
@@ -162,10 +185,15 @@
         <div class="section-head">
           <p class="eyebrow">Pedido</p>
           <h2>Peça o enfeite do seu pet</h2>
-          <p>A foto você envia logo depois do pagamento.</p>
+          <p>Primeiro o pagamento; a foto você envia logo em seguida, aqui no site.</p>
         </div>
         <div class="buy">
           <form class="card" id="checkout" novalidate>
+            <ol class="flow" aria-label="Como funciona a compra">
+              <li class="on"><span>1</span>Pagamento seguro</li>
+              <li><span>2</span>Envie a foto</li>
+              <li><span>3</span>Escolha a arte</li>
+            </ol>
             <p class="alert info" data-aviso hidden></p>
             <div class="alert error" id="checkout-error" hidden role="alert"></div>
             <label class="field"><span>Seu nome completo</span>
@@ -174,22 +202,10 @@
               <input name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="maria@email.com"></label>
             <label class="field"><span>WhatsApp <small>(com DDD)</small></span>
               <input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
-            <div class="extras" id="extras" hidden>
-              <div class="extras-text">
-                <b>Quer mais enfeites?</b>
-                <small>Outro pet ou mais um igual, para presentear.</small>
-              </div>
-              <div class="stepper" role="group" aria-label="Enfeites adicionais">
-                <button type="button" id="extras-minus" aria-label="Menos um enfeite">−</button>
-                <output id="extras-count" aria-live="polite">0</output>
-                <button type="button" id="extras-plus" aria-label="Mais um enfeite">+</button>
-              </div>
-              <p class="extras-prices" id="extras-prices"></p>
-            </div>
             <fieldset class="delivery" id="delivery" hidden>
               <legend>Como você quer receber?</legend>
               <label class="choice"><input type="radio" name="delivery" value="correios" checked>
-                <span><b>📦 Receber em casa</b><small>Pelos Correios, para o seu endereço</small></span></label>
+                <span><b>📦 Receber em casa</b><small id="ship-choice-label">Frete grátis para quase todo o Brasil</small></span></label>
               <label class="choice"><input type="radio" name="delivery" value="retirada">
                 <span><b>🏠 Retirar em Cosmópolis</b><small id="pickup-label">Sem frete</small></span></label>
             </fieldset>
@@ -198,12 +214,14 @@
             <p class="small muted" id="quote-status" style="margin:-8px 0 14px" aria-live="polite"></p>
             <div class="totals" id="totals" hidden>
               <div><span>Enfeite personalizado</span><span data-price>R$ 49,90</span></div>
-              <div id="row-extras" hidden><span id="extras-label"></span><span id="quote-extras"></span></div>
               <div id="row-ship"><span>Frete <small class="muted" id="quote-label"></small></span><span id="quote-shipping"></span></div>
               <div class="total"><span>Total</span><span id="quote-total"></span></div>
             </div>
             <button class="btn block" type="submit" id="checkout-btn">Ir para o pagamento · <span id="btn-total" data-price>R$ 49,90</span></button>
-            <p class="secure">🔒 Pagamento seguro pelo Mercado Pago</p>
+            <div class="secure-box">
+              <p><b>🔒 Pagamento 100% seguro pelo Mercado Pago</b> (Pix ou cartão). Seus dados de pagamento não passam pela gente.</p>
+              <p><b>📸 Pagou, voltou:</b> logo depois do pagamento você cai na área de criação e já envia a foto do seu pet.</p>
+            </div>
             <p class="consent">Ao continuar, você concorda com as <a href="politicas.html" target="_blank">condições de compra e privacidade</a>.</p>
           </form>
 
@@ -224,12 +242,15 @@
           <p class="eyebrow">Dúvidas</p>
           <h2>Perguntas comuns</h2>
         </div>
+        <details><summary>O pagamento é seguro?</summary><p>Sim. O pagamento é feito no Mercado Pago, com Pix ou cartão. Os dados do seu cartão vão direto para eles e nunca passam pela gente.</p></details>
         <details><summary>Que foto devo enviar?</summary><p>Uma foto em que o rosto do pet apareça de frente e com boa luz. Foto de celular funciona muito bem; o fundo e a pose não importam.</p></details>
         <details><summary>E se eu não gostar da arte?</summary><p>Você pode criar até <span data-credits>4</span> artes, com a mesma foto ou com fotos diferentes, e escolher a que mais gostar. Só produzimos depois da sua escolha.</p></details>
         <details><summary>Serve para gato, ave e outros bichinhos?</summary><p>Sim. Você escolhe se é gato, cachorro, ave ou roedor, e a arte é feita pensando nos detalhes de cada um, como a cor dos olhos dos gatos.</p></details>
         <details><summary>As cores ficam iguais às da tela?</summary><p>A prévia já mostra as cores dos filamentos que usamos. Como a peça é impressa em plástico, com relevo, pode haver pequenas diferenças de tom.</p></details>
         <details><summary>Quanto tempo demora para chegar?</summary><p>Produzimos em até <span data-prazo>5 dias úteis</span> depois que você escolhe a arte. Depois, é o prazo dos Correios para a sua cidade. Você recebe o código de rastreio.</p></details>
-        <details><summary>Posso pedir mais de um enfeite?</summary><p>Pode. No pedido, escolha quantos enfeites a mais você quer (até 3). Cada um pode ser de outro pet ou igual ao primeiro, com outro nome no verso, e sai mais barato.</p></details>
+        <details><summary>Posso pedir mais de um enfeite?</summary><p>Pode. Depois de escolher a arte, oferecemos enfeites a mais por <span data-extra-price>R$ 12,90</span> cada (até 3): de outro pet ou igual ao primeiro, com outro nome no verso. Vão no mesmo pacote, sem frete a mais.</p></details>
+        <details><summary>O frete é grátis mesmo?</summary><p>Sim: a gente paga o frete para quase todo o Brasil. Só em CEPs muito distantes, em que o envio passa de <span data-free-up>R$ 20,00</span>, você paga apenas a diferença, e o valor aparece antes de pagar, assim que você digita o CEP.</p></details>
+        <details><summary>Quando eu envio a foto?</summary><p>Logo depois do pagamento. O Mercado Pago te traz de volta para a área de criação do site, onde você escolhe o tipo de pet e envia a foto. Se fechar sem querer, toque em “Já comprei”, no alto da página.</p></details>
         <details><summary>Posso retirar em vez de receber pelos Correios?</summary><p>Pode, sem frete: a retirada é no Studio Lina Palma, Rua 7 de Setembro, 433, Centro, Cosmópolis (SP). Avisamos pelo WhatsApp quando estiver pronto.</p></details>
         <details><summary>As datas para chegar antes do Natal são garantidas?</summary><p>São datas recomendadas, calculadas com os prazos médios dos Correios mais o nosso tempo de produção. O transporte não depende de nós, então não conseguimos garantir o dia exato da entrega. Se for para muito perto do Natal, prefira pedir antes ou retirar.</p></details>
         <details><summary>Já paguei. Como volto para enviar a foto?</summary><p>Toque em “Já comprei”, no alto da página, e informe o e-mail e o WhatsApp usados na compra.</p></details>

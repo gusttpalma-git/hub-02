@@ -129,6 +129,38 @@
       </div>
     </section>
 
+    <!-- oferta no fim: mais enfeites no mesmo pacote -->
+    <section id="view-upsell" hidden>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Endereço</li></ol>
+      <div class="card center upsell">
+        <div class="up-pair" aria-hidden="true">
+          <div class="mockup sm"><img id="up-art1" alt=""></div>
+          <div class="mockup sm"><img id="up-art2" alt=""></div>
+          <span class="up-plus">+</span>
+        </div>
+        <h2>Que tal mais um enfeite? 🎁</h2>
+        <p class="muted">Do outro pet da família ou mais um igual, para dar de presente. Vai no mesmo pacote, <b>sem frete a mais</b>.</p>
+        <p class="up-price"><strong id="up-price">R$ 12,90</strong> <span>cada</span></p>
+        <div class="alert error" id="upsell-error" hidden role="alert"></div>
+        <div id="up-offer">
+          <div class="stepper up-stepper" id="up-stepper" role="group" aria-label="Quantos enfeites a mais">
+            <button type="button" id="up-minus" aria-label="Menos um">−</button>
+            <output id="up-qty" aria-live="polite">1</output>
+            <button type="button" id="up-plus" aria-label="Mais um">+</button>
+          </div>
+          <button class="btn green block" type="button" id="up-yes">Quero mais 1</button>
+          <button class="btn ghost block" type="button" id="up-no">Não, obrigado. Continuar →</button>
+          <p class="small muted" style="margin:12px 0 0">🔒 Pagamento seguro pelo Mercado Pago. Depois você volta direto para cá.</p>
+        </div>
+        <div id="up-waiting" hidden>
+          <div class="spinner dark"></div>
+          <p style="margin:14px 0 4px"><b>Aguardando o pagamento do adicional…</b></p>
+          <p class="small muted">Com Pix leva poucos segundos. Esta tela atualiza sozinha.</p>
+          <p style="margin:12px 0 0"><button class="linklike" type="button" id="up-retry">Pagar de novo</button> · <button class="linklike" type="button" id="up-skip">Continuar sem o adicional</button></p>
+        </div>
+      </div>
+    </section>
+
     <!-- enfeites adicionais: outro pet ou mais um igual -->
     <section id="view-extras" hidden>
       <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Endereço</li></ol>
@@ -212,26 +244,43 @@
     </div>
   </dialog>
 
-  <dialog id="tips">
-    <button class="close" type="button" aria-label="Fechar" data-close>×</button>
-    <div class="inner">
-      <h3>A foto certa faz toda a diferença</h3>
-      <p class="muted" id="tips-left"></p>
-      <div class="tip-good">
-        <img src="img/foto-boa.jpg" alt="Cachorro sentado, olhando para a câmera, bem iluminado">
-        <span class="tip-tag">✓ Assim a arte fica ótima</span>
-      </div>
-      <ul class="tip-list">
-        <li>De frente, olhando para a câmera</li>
-        <li>Celular na altura dos olhos do pet</li>
-        <li>Rosto perto, ocupando a foto</li>
-        <li>Perto de uma janela, com luz do dia</li>
-      </ul>
-      <div class="tip-bad">
-        <figure><img src="img/foto-ruim-escura.jpg" alt="Foto escura com o cachorro longe"><span class="tip-tag">✗ Escura ou de longe</span></figure>
-        <figure><img src="img/foto-ruim-costas.jpg" alt="Foto tremida do cachorro de costas"><span class="tip-tag">✗ De costas ou tremida</span></figure>
-      </div>
-      <button class="btn green block" type="button" data-close>Entendi</button>
+  <!-- boas-vindas: como deve ser a foto (aparece ao entrar e em "Ver dicas") -->
+  <dialog id="onb" class="onb" aria-label="Como deve ser a foto do pet">
+    <div class="onb-top">
+      <span class="onb-count" id="onb-count">1 de 3</span>
+      <button class="onb-skip" type="button" data-onb-close>Pular ✕</button>
+    </div>
+    <p class="onb-note" id="onb-note" hidden></p>
+    <div class="onb-track" id="onb-track">
+      <section class="onb-slide on">
+        <div class="onb-pair">
+          <figure class="good"><img src="img/foto-boa.jpg" alt="Cachorro de frente, olhando para a câmera"><b>✓</b></figure>
+          <figure class="bad"><img src="img/foto-ruim-costas.jpg" alt="Cachorro de costas"><b>✕</b></figure>
+        </div>
+        <h3>Rostinho de frente</h3>
+        <p>Só um pet, olhando para a câmera.</p>
+      </section>
+      <section class="onb-slide">
+        <div class="onb-pair">
+          <figure class="good"><img src="img/foto-boa.jpg" alt="Foto clara, com o pet de perto"><b>✓</b></figure>
+          <figure class="bad"><img src="img/foto-ruim-escura.jpg" alt="Foto escura, com o pet longe"><b>✕</b></figure>
+        </div>
+        <h3>Com luz e de pertinho</h3>
+        <p>Perto da janela, de dia. Nada de foto escura ou de longe.</p>
+      </section>
+      <section class="onb-slide">
+        <div class="onb-magic">
+          <img src="img/exemplo-4-foto.jpg" alt="Foto de um gato">
+          <span class="onb-spark" aria-hidden="true">✨</span>
+          <img src="img/exemplo-4-arte.png" alt="A arte criada a partir da foto">
+        </div>
+        <h3>Pronto! Em 1 minuto vira arte</h3>
+        <p>Você cria até <span data-onb-credits>4</span> artes e escolhe a preferida.</p>
+      </section>
+    </div>
+    <div class="onb-foot">
+      <div class="onb-dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+      <button class="btn green" type="button" id="onb-next">Próximo →</button>
     </div>
   </dialog>
 

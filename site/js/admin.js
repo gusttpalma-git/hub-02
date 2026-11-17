@@ -194,7 +194,7 @@
         el("dt", {}, "WhatsApp"), el("dd", {}, el("a", { href: "https://wa.me/55" + o.whatsapp, target: "_blank", rel: "noopener" }, PN.maskPhone(o.whatsapp))),
         el("dt", {}, "E-mail"), el("dd", {}, o.email),
         el("dt", {}, "Pet"), el("dd", {}, o.pet_name || "—"),
-        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "")),
+        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "") + (o.shipping_cost_cents ? " · frete real " + PN.money(o.shipping_cost_cents) : "")),
         el("dt", {}, "Artes"), el("dd", {}, o.credits_used + " de " + o.credits_total + " usadas"),
       ),
       o.customer_notes && el("div", { class: "alert info", style: "margin:12px 0 0" }, "Observações do cliente: " + o.customer_notes),
@@ -349,6 +349,7 @@
 
   function fillSettings(s) {
     const f = $("#settings");
+    const brl = (cents) => ((cents || 0) / 100).toFixed(2).replace(".", ",");
     f.price.value = (s.price_cents / 100).toFixed(2).replace(".", ",");
     f.credits.value = s.credits_per_order;
     f.test_mode.checked = s.test_mode;
@@ -357,8 +358,9 @@
     f.pickup_enabled.checked = pick.enabled !== false;
     f.pickup_name.value = pick.name || "";
     f.pickup_address.value = pick.address || "";
-    const ep = s.extra_prices || [];
-    [0, 1, 2].forEach((i) => { f["extra_" + i].value = ep[i] ? (ep[i] / 100).toFixed(2).replace(".", ",") : ""; });
+    f.extra_price.value = brl(s.extra_price_cents);
+    f.extra_max.value = s.extra_max ?? 3;
+    f.free_up_to.value = brl(s.free_shipping_up_to_cents);
     f.extra_credits.value = s.extra_credits || 3;
     filaments = s.filaments || [];
     modelCfg = s.model || {};
@@ -382,7 +384,6 @@
     const st = s.store || {};
     STORE_FIELDS.forEach((k) => { f["st_" + k].value = st[k] || ""; });
     f.st_whatsapp.value = st.whatsapp ? PN.maskPhone(st.whatsapp.replace(/^55/, "")) : "";
-    const brl = (cents) => ((cents || 0) / 100).toFixed(2).replace(".", ",");
     f.shipping_mode.value = s.shipping_mode;
     REGIONS.forEach((r) => { f["ship_" + r].value = brl(s.shipping_table[r]); });
     f.origin_cep.value = s.origin_cep ? PN.maskCep(s.origin_cep) : "";
@@ -423,8 +424,9 @@
   };
   function showShipping() {
     const mode = $("#settings").shipping_mode.value;
-    $("#ship-table").hidden = mode === "incluso";
-    $("#ship-me").hidden = mode !== "melhor_envio";
+    $("#ship-table").hidden = mode === "incluso" || mode === "gratis_ate";
+    $("#ship-me").hidden = mode !== "melhor_envio" && mode !== "gratis_ate";
+    $("#ship-free").hidden = mode !== "gratis_ate";
   }
   $("#settings").shipping_mode.addEventListener("change", showShipping);
 
@@ -452,7 +454,9 @@
         store: Object.fromEntries(STORE_FIELDS.map((k) => [k, f["st_" + k].value])),
         filaments: f.filaments.value,
         pickup: { enabled: f.pickup_enabled.checked, name: f.pickup_name.value, address: f.pickup_address.value },
-        extra_prices: [0, 1, 2].map((i) => toCents(f["extra_" + i].value)).filter((v) => v > 0),
+        extra_price_cents: toCents(f.extra_price.value),
+        extra_max: f.extra_max.value,
+        free_shipping_up_to_cents: toCents(f.free_up_to.value),
         extra_credits: f.extra_credits.value,
         model: { diameter: f.model_diameter.value, base: f.model_base.value, band: f.model_band.value },
         package_cm: { length: f.pk_length.value, width: f.pk_width.value, height: f.pk_height.value },

@@ -20,15 +20,21 @@
     document.querySelectorAll("[data-credits]").forEach((el) => { el.textContent = c.credits; });
     $("#testbar").hidden = !c.test_mode;
     state.price = c.price_cents;
-    state.calcShipping = c.shipping_mode === "calculado";
+    state.mode = c.shipping_mode;
+    state.calcShipping = c.shipping_mode !== "incluso";
+    state.freeUpTo = c.free_shipping_up_to_cents;
     renderDeadlines(c.regions || []);
-    state.extraPrices = c.extra_prices || [];
-    renderExtras();
+    if (c.extra_price_cents) document.querySelectorAll("[data-extra-price]").forEach((el) => { el.textContent = PN.money(c.extra_price_cents); });
+    if (state.freeUpTo) document.querySelectorAll("[data-free-up]").forEach((el) => { el.textContent = PN.money(state.freeUpTo); });
     if (c.pickup) {
       $("#delivery").hidden = false;
       $("#pickup-label").textContent = "Sem frete · " + c.pickup.name + ", " + c.pickup.address;
     }
-    document.querySelectorAll("[data-frete]").forEach((el) => { el.textContent = state.calcShipping ? "+ frete para o seu CEP" : "frete incluso"; });
+    // Frete: "incluso" e "gratis_ate" são vendidos como frete grátis; os outros, calculados pelo CEP.
+    const free = c.shipping_mode === "incluso" || c.shipping_mode === "gratis_ate";
+    document.querySelectorAll("[data-frete]").forEach((el) => { el.textContent = free ? "Frete grátis" : "Frete calculado pelo CEP"; });
+    document.querySelectorAll("[data-frete-sub]").forEach((el) => { el.textContent = c.shipping_mode === "incluso" ? "para todo o Brasil" : c.shipping_mode === "gratis_ate" ? "para quase todo o Brasil" : ""; });
+    $("#ship-choice-label").textContent = c.shipping_mode === "incluso" ? "Frete grátis para todo o Brasil" : free ? "Frete grátis para quase todo o Brasil" : "Frete calculado pelo seu CEP";
   }).catch(() => { /* mantém os valores padrão do HTML */ });
 
   // Últimos dias para pedir, por região (definidos no painel).
@@ -51,41 +57,23 @@
     $("#deadlines").hidden = !rows.length;
   }
 
-  // ───────── valor do pedido: enfeite + adicionais + frete ─────────
+  // ───────── valor do pedido: enfeite + frete ─────────
 
-  const state = { price: 4990, calcShipping: false, quotedCep: "", cepError: "", extras: 0, extraPrices: [], shipping: 0, days: null };
+  const state = { price: 4990, mode: "incluso", calcShipping: false, freeUpTo: null, quotedCep: "", cepError: "", shipping: 0, days: null };
   const delivery = () => (form.querySelector("input[name=delivery]:checked") || {}).value || "correios";
-  const extrasCents = () => state.extraPrices.slice(0, state.extras).reduce((a, b) => a + b, 0);
 
   function updateTotals() {
     const pickup = delivery() === "retirada";
     const ship = pickup ? 0 : state.shipping;
-    const total = state.price + extrasCents() + ship;
+    const total = state.price + ship;
     const showShip = !pickup && state.calcShipping && state.quotedCep;
-    $("#row-extras").hidden = !state.extras;
-    $("#quote-extras").textContent = PN.money(extrasCents());
-    $("#extras-label").textContent = state.extras === 1 ? "1 enfeite adicional" : state.extras + " enfeites adicionais";
     $("#row-ship").hidden = !showShip;
-    $("#quote-label").textContent = state.days ? "· cerca de " + state.days + " dias úteis" : "";
-    $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis";
+    $("#quote-label").textContent = state.days ? "· chega em cerca de " + state.days + " dias úteis após o envio" : "";
+    $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis 🎉";
     $("#quote-total").textContent = PN.money(total);
-    $("#totals").hidden = !(state.extras || showShip);
+    $("#totals").hidden = !showShip;
     $("#btn-total").textContent = PN.money(total);
   }
-
-  // Enfeites adicionais (outro pet ou mais um igual), com preço menor a cada um.
-  function renderExtras() {
-    const box = $("#extras");
-    if (!state.extraPrices.length) { box.hidden = true; return; }
-    box.hidden = false;
-    $("#extras-count").textContent = state.extras;
-    $("#extras-minus").disabled = state.extras === 0;
-    $("#extras-plus").disabled = state.extras >= state.extraPrices.length;
-    $("#extras-prices").textContent = state.extraPrices.map((c, i) => `${i + 2}º enfeite ${PN.money(c)}`).join("  ·  ");
-    updateTotals();
-  }
-  $("#extras-minus").addEventListener("click", () => { state.extras = Math.max(0, state.extras - 1); renderExtras(); requote(); });
-  $("#extras-plus").addEventListener("click", () => { state.extras = Math.min(state.extraPrices.length, state.extras + 1); renderExtras(); requote(); });
 
   // Entrega pelos Correios ou retirada no ponto.
   form.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => {
@@ -106,13 +94,15 @@
     const seq = ++quoteSeq;
     status.textContent = state.calcShipping ? "Calculando o frete…" : "Conferindo o CEP…";
     try {
-      const q = await PN.api("quote", { cep, extras: state.extras });
+      const q = await PN.api("quote", { cep });
       if (seq !== quoteSeq) return;
       state.quotedCep = cep;
       state.cepError = "";
       state.shipping = q.shipping_cents || 0;
       state.days = q.days;
-      status.textContent = state.calcShipping ? "" : "✓ Entregamos no seu endereço. Frete incluso.";
+      status.textContent = !state.calcShipping ? "✓ Entregamos no seu endereço. Frete grátis!"
+        : !state.shipping ? "🎉 Frete grátis para o seu CEP!"
+        : q.free_up_to_cents ? `Seu CEP é bem longe: a gente paga ${PN.money(q.free_up_to_cents)} do frete e você paga só a diferença.` : "";
     } catch (err) {
       if (seq !== quoteSeq) return;
       state.cepError = err.message;
@@ -146,7 +136,6 @@
       whatsapp: form.whatsapp.value,
       cep: form.cep.value,
       delivery: delivery(),
-      extras: state.extras,
       site_url: location.href.split(/[?#]/)[0],
     };
     if (data.name.length < 3) { form.name.focus(); return showError(errorBox, "Digite seu nome completo."); }
@@ -160,7 +149,7 @@
 
     btn.disabled = true;
     btn.textContent = "Abrindo o pagamento…";
-    PN.track("InitiateCheckout", { value: (state.price + extrasCents()) / 100, currency: "BRL" });
+    PN.track("InitiateCheckout", { value: state.price / 100, currency: "BRL" });
     try {
       const out = await PN.api("checkout", data);
       PN.setToken(out.token);
@@ -193,6 +182,17 @@
       b.disabled = false;
     }
   });
+
+  // Vídeo da criação: toca sozinho (sem som) quando aparece na tela.
+  const video = $("#demo-video");
+  if (video) {
+    const play = $("#video-play");
+    const start = () => { video.play().then(() => { play.hidden = true; }).catch(() => { play.hidden = false; }); };
+    play.addEventListener("click", () => { video.controls = true; start(); });
+    if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      new IntersectionObserver(([en]) => { if (en.isIntersecting) start(); else video.pause(); }, { threshold: 0.4 }).observe(video);
+    }
+  }
 
   // Botão fixo no celular: aparece depois do topo e some quando o formulário está na tela.
   const sticky = $("#sticky");

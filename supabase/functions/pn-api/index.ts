@@ -93,6 +93,7 @@ function b64ToBytes(b64: string): Uint8Array {
 // ───────────────────────── configurações ─────────────────────────
 
 type Settings = Record<string, string>;
+const SHIP_MODES = ["incluso", "gratis_ate", "tabela", "melhor_envio"];
 
 async function loadSettings(): Promise<Settings> {
   const { data, error } = await db.from("pn_settings").select("key, value");
@@ -162,7 +163,9 @@ function cfg(s: Settings) {
     maxColors: Math.min(6, Math.max(2, parseInt(s.max_colors || "4", 10) || 4)),
     adminHash: s.admin_password_hash || "",
     filaments: parseFilaments(s.filaments),
-    extraPrices: String(s.extra_prices || "1290,990,690").split(",").map((v) => Math.max(0, parseInt(v, 10) || 0)).filter((v) => v > 0).slice(0, 3),
+    // Enfeite adicional: oferecido no fim da criação (depois de escolher a arte), preço único.
+    extraPrice: Math.max(0, parseInt(s.extra_price_cents || "1290", 10) || 0),
+    extraMax: Math.min(3, Math.max(0, parseInt(s.extra_max ?? "3", 10) || 0)),
     extraCredits: Math.min(10, Math.max(1, parseInt(s.extra_credits || "3", 10) || 3)),
     model: {
       diameter: num(s.model_diameter, 70, 40, 120),
@@ -172,7 +175,9 @@ function cfg(s: Settings) {
     shipping: {
       regions: parseRegions(s.regions),
       packageCm: { length: num(s.package_length, 16, 1, 100), width: num(s.package_width, 11, 1, 100), height: num(s.package_height, 2, 1, 100) },
-      mode: ["incluso", "tabela", "melhor_envio"].includes(s.shipping_mode) ? s.shipping_mode : "incluso",
+      mode: SHIP_MODES.includes(s.shipping_mode) ? s.shipping_mode : "incluso",
+      // "gratis_ate": a loja paga o frete até este valor; acima disso o cliente paga só a diferença.
+      freeUpTo: Math.max(0, parseInt(s.free_shipping_up_to_cents || "2000", 10) || 0),
       table: parseTable(s.shipping_table),
       originCep: digits(s.origin_cep),
       melhorEnvioToken: env("MELHOR_ENVIO_TOKEN") || s.melhor_envio_token || "",
@@ -229,6 +234,8 @@ async function mp(token: string, path: string, init?: RequestInit) {
 // A verdade vem sempre da API deles, nunca do que chega no navegador ou no webhook.
 // deno-lint-ignore no-explicit-any
 async function applyPayment(payment: any) {
+  const ref = String(payment?.external_reference ?? "");
+  if (ref.startsWith("up:")) return await applyUpsellPayment(payment, ref.slice(3));
   const orderId = payment?.external_reference;
   if (!isUuid(orderId)) return;
   const { data: order } = await db.from("pn_orders").select("id, amount_cents, payment_status").eq("id", orderId).maybeSingle();
@@ -294,6 +301,32 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
   }
 }
 
+// Pagamento de enfeites adicionais (comprados depois, no fim da criação).
+// deno-lint-ignore no-explicit-any
+async function applyUpsellPayment(payment: any, upsellId: string) {
+  if (!isUuid(upsellId) || payment.status !== "approved") return;
+  const { data: up } = await db.from("pn_upsells").select("id, amount_cents, status").eq("id", upsellId).maybeSingle();
+  if (!up || up.status !== "pending") return;
+  const paidCents = Math.round(Number(payment.transaction_amount) * 100);
+  if (payment.currency_id !== "BRL" || paidCents < up.amount_cents) {
+    console.error("adicional com valor divergente", upsellId, paidCents, up.amount_cents);
+    return;
+  }
+  const c = cfg(await loadSettings());
+  await db.rpc("pn_apply_upsell", { p_upsell: upsellId, p_payment: String(payment.id), p_credits: c.extraCredits });
+}
+
+async function syncUpsells(token: string, orderId: string) {
+  const since = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+  const { data } = await db.from("pn_upsells").select("id").eq("order_id", orderId).eq("status", "pending").gt("created_at", since);
+  for (const up of data ?? []) {
+    const found = await mp(token, `/v1/payments/search?external_reference=up:${up.id}&sort=date_created&criteria=desc&limit=5`);
+    // deno-lint-ignore no-explicit-any
+    const approved = (found.results ?? []).find((p: any) => p.status === "approved");
+    if (approved) await applyUpsellPayment(approved, up.id);
+  }
+}
+
 async function syncOrderPayment(token: string, orderId: string) {
   const found = await mp(token, `/v1/payments/search?external_reference=${orderId}&sort=date_created&criteria=desc&limit=10`);
   // deno-lint-ignore no-explicit-any
@@ -337,8 +370,16 @@ async function orderView(order: any) {
   const { data: items } = await db.from("pn_order_items")
     .select("position, kind, credits_total, credits_used, chosen_generation, pet_name").eq("order_id", o.id).order("position");
   const urls = await signedUrls((gens ?? []).map((g) => g.result_path));
+  const c = cfg(await loadSettings());
+  const { count: upPending } = await db.from("pn_upsells").select("id", { count: "exact", head: true })
+    .eq("order_id", o.id).eq("status", "pending").gt("created_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString());
   return {
     extras: o.extras,
+    upsell: {
+      price_cents: c.extraPrice,
+      max: Math.max(0, c.extraMax - (o.extras ?? 0)),
+      pending: (upPending ?? 0) > 0,
+    },
     items: (items ?? []).map((it) => ({
       position: it.position, kind: it.kind, chosen_generation: it.chosen_generation, pet_name: it.pet_name,
       credits_total: it.credits_total, credits_left: Math.max(0, it.credits_total - it.credits_used),
@@ -439,10 +480,12 @@ async function publicConfig() {
     credits: c.credits,
     test_mode: c.testMode,
     sales_open: c.testMode || !!c.mpToken,
-    shipping_mode: c.shipping.mode === "incluso" ? "incluso" : "calculado",
+    shipping_mode: c.shipping.mode === "incluso" || c.shipping.mode === "gratis_ate" ? c.shipping.mode : "calculado",
+    free_shipping_up_to_cents: c.shipping.mode === "gratis_ate" ? c.shipping.freeUpTo : null,
     store: c.store,
     pickup: c.pickup.enabled ? { name: c.pickup.name, address: c.pickup.address } : null,
-    extra_prices: c.extraPrices,
+    extra_price_cents: c.extraMax > 0 ? c.extraPrice : 0,
+    extra_max: c.extraPrice > 0 ? c.extraMax : 0,
     extra_credits: c.extraCredits,
     model: c.model,
     filaments: c.filaments,
@@ -461,16 +504,28 @@ async function openArt(url: URL) {
   return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
 
-// Quantos adicionais (0..3) e quanto custam: o 2º enfeite custa extra_prices[0], o 3º [1]…
-function extrasOf(c: ReturnType<typeof cfg>, v: unknown) {
-  const n = Math.max(0, Math.min(c.extraPrices.length, parseInt(String(v ?? 0), 10) || 0));
-  const prices = c.extraPrices.slice(0, n);
-  return { n, prices, cents: prices.reduce((a, b) => a + b, 0) };
-}
-
 // Pacote um pouco mais pesado quando vão mais peças (≈ 20 g cada).
 function shippingFor(c: ReturnType<typeof cfg>, extras: number) {
   return { ...c.shipping, weightGrams: c.shipping.weightGrams + extras * 20 };
+}
+
+// Quanto o cliente paga de frete. No modo "gratis_ate" cota o frete real (Melhor Envio; se falhar,
+// a tabela por região) e a loja paga até o limite: o cliente só paga o que passar disso.
+async function shippingCharge(c: ReturnType<typeof cfg>, cep: string, extras = 0) {
+  const s = shippingFor(c, extras);
+  if (s.mode === "incluso") return { cents: 0, cost: null as number | null, label: "Frete grátis", days: null as number | null };
+  if (s.mode === "gratis_ate") {
+    let q = { cents: 0, label: "", days: null as number | null };
+    try {
+      q = await quoteShipping({ ...s, mode: "melhor_envio" }, cep);
+    } catch (err) {
+      console.error("sem cotação de frete; frete grátis", err);
+    }
+    const charge = Math.max(0, q.cents - s.freeUpTo);
+    return { cents: charge, cost: q.cents || null, label: charge ? (q.label || "Frete") : "Frete grátis", days: q.days };
+  }
+  const q = await quoteShipping(s, cep);
+  return { cents: q.cents, cost: q.cents, label: q.label, days: q.days };
 }
 
 async function quote(b: Body) {
@@ -483,9 +538,11 @@ async function quote(b: Body) {
     throw new HttpError(400, (err as Error).message);
   }
   try {
-    const ex = extrasOf(c, b.extras);
-    const q = await quoteShipping(shippingFor(c, ex.n), cep);
-    return json({ shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, extras_cents: ex.cents, total_cents: c.priceCents + ex.cents + q.cents });
+    const q = await shippingCharge(c, cep);
+    return json({
+      shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, total_cents: c.priceCents + q.cents,
+      free_up_to_cents: c.shipping.mode === "gratis_ate" ? c.shipping.freeUpTo : null,
+    });
   } catch (_) {
     throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
   }
@@ -515,9 +572,8 @@ async function checkout(b: Body) {
 
   // O frete é sempre recalculado aqui: o valor cobrado nunca vem do navegador.
   const pickup = b.delivery === "retirada";
-  const ex = extrasOf(c, b.extras);
   if (pickup && !c.pickup.enabled) throw new HttpError(400, "A retirada não está disponível no momento.");
-  let shipping = { cents: 0, label: pickup ? "Retirada: " + c.pickup.name : "Frete incluso" };
+  let shipping: { cents: number; cost: number | null; label: string } = { cents: 0, cost: null, label: pickup ? "Retirada: " + c.pickup.name : "Frete grátis" };
   const cep = pickup ? "" : digits(b.cep);
   if (!pickup && cep.length !== 8) throw new HttpError(400, "Digite o CEP de entrega (8 números).");
   if (!pickup) {
@@ -529,12 +585,12 @@ async function checkout(b: Body) {
   }
   if (!pickup && c.shipping.mode !== "incluso") {
     try {
-      shipping = await quoteShipping(shippingFor(c, ex.n), cep);
+      shipping = await shippingCharge(c, cep);
     } catch (_) {
       throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
     }
   }
-  const totalCents = c.priceCents + ex.cents + shipping.cents;
+  const totalCents = c.priceCents + shipping.cents;
 
   const token = randomHex(24);
   const { data: order, error } = await db.from("pn_orders").insert({
@@ -546,24 +602,15 @@ async function checkout(b: Body) {
     amount_cents: totalCents,
     shipping_cents: shipping.cents,
     shipping_label: shipping.label,
+    shipping_cost_cents: shipping.cost,
     cep: cep || null,
     delivery_method: pickup ? "retirada" : "correios",
-    extras: ex.n,
-    extras_cents: ex.cents,
     site_url: base,
     credits_total: c.credits,
     is_test: c.testMode,
     ...(c.testMode ? { payment_status: "paid", paid_at: new Date().toISOString() } : {}),
   }).select("*").single();
   if (error || !order) throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
-  if (ex.n) {
-    const rows = Array.from({ length: ex.n }, (_, i) => ({ order_id: order.id, position: i + 1, credits_total: c.extraCredits }));
-    const { error: itemsError } = await db.from("pn_order_items").insert(rows);
-    if (itemsError) {
-      await db.from("pn_orders").delete().eq("id", order.id);
-      throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
-    }
-  }
 
   const studio = `${base}criar.html?t=${token}`;
   if (c.testMode) {
@@ -582,13 +629,7 @@ async function checkout(b: Body) {
           quantity: 1,
           currency_id: "BRL",
           unit_price: c.priceCents / 100,
-        }, ...ex.prices.map((cents, i) => ({
-          id: "enfeite-adicional-" + (i + 1),
-          title: `Enfeite adicional ${i + 1}`,
-          quantity: 1,
-          currency_id: "BRL",
-          unit_price: cents / 100,
-        })), ...(shipping.cents > 0 ? [{
+        }, ...(shipping.cents > 0 ? [{
           id: "frete",
           title: "Frete",
           description: shipping.label,
@@ -622,6 +663,11 @@ async function getOrder(b: Body) {
         await syncOrderPayment(c.mpToken, order.id);
         order = await getOrderByToken(b.token);
       } catch (_) { /* segue como pendente; o webhook ou a próxima consulta resolvem */ }
+    }
+  } else if (order.payment_status === "paid" && !order.is_test) {
+    const c = cfg(await loadSettings());
+    if (c.mpToken) {
+      try { await syncUpsells(c.mpToken, order.id); } catch (_) { /* o webhook resolve */ }
     }
   }
   return json({ order: await orderView(order) });
@@ -691,6 +737,57 @@ async function choose(b: Body) {
   if (item === 0) await db.from("pn_orders").update({ chosen_generation: gen.id }).eq("id", order.id);
   else await db.from("pn_order_items").update({ chosen_generation: gen.id, kind: "novo" }).eq("order_id", order.id).eq("position", item);
   return json({ ok: true });
+}
+
+// Upsell no fim da criação: mais enfeites (outro pet ou mais um igual) no mesmo pacote.
+async function addExtras(b: Body) {
+  const order = await getOrderByToken(b.token);
+  if (order.payment_status !== "paid") throw new HttpError(402, "O pagamento ainda não foi confirmado.");
+  if (order.confirmed_at || order.production_status !== "aguardando") throw new HttpError(409, "Este pedido já foi finalizado. Fale com a gente pelo WhatsApp.");
+  const c = cfg(await loadSettings());
+  const room = c.extraPrice > 0 ? c.extraMax - (order.extras ?? 0) : 0;
+  const qty = parseInt(String(b.qty ?? 1), 10) || 0;
+  if (room <= 0) throw new HttpError(400, "Este pedido já tem o máximo de enfeites.");
+  if (!(qty >= 1 && qty <= room)) throw new HttpError(400, `Escolha de 1 a ${room} enfeite(s).`);
+  const amount = qty * c.extraPrice;
+
+  const { data: up, error } = await db.from("pn_upsells").insert({ order_id: order.id, qty, amount_cents: amount }).select("id").single();
+  if (error || !up) throw new HttpError(500, "Não foi possível adicionar. Tente de novo.");
+
+  if (order.is_test) {
+    await db.rpc("pn_apply_upsell", { p_upsell: up.id, p_payment: "teste", p_credits: c.extraCredits });
+    return json({ order: await orderView(await getOrderByToken(b.token)) });
+  }
+  if (!c.mpToken) throw new HttpError(503, "Pagamento indisponível no momento.");
+  const studio = `${order.site_url}criar.html?t=${order.token}&mais=1`;
+  const site = new URL(order.site_url);
+  try {
+    const pref = await mp(c.mpToken, "/checkout/preferences", {
+      method: "POST",
+      body: JSON.stringify({
+        items: [{
+          id: "enfeite-adicional",
+          title: qty === 1 ? "Enfeite adicional" : `${qty} enfeites adicionais`,
+          description: `Pedido ${order.code}`,
+          quantity: qty,
+          currency_id: "BRL",
+          unit_price: c.extraPrice / 100,
+        }],
+        payer: { name: order.name, email: order.email },
+        external_reference: "up:" + up.id,
+        back_urls: { success: studio, pending: studio, failure: studio },
+        ...(site.protocol === "https:" ? { auto_return: "approved" } : {}),
+        notification_url: `${FUNCTION_URL}?action=mp-webhook`,
+        statement_descriptor: "PATINHA NATAL",
+        payment_methods: { excluded_payment_types: [{ id: "ticket" }], installments: 1 },
+      }),
+    });
+    await db.from("pn_upsells").update({ mp_preference_id: pref.id }).eq("id", up.id);
+    return json({ redirect: pref.init_point });
+  } catch (err) {
+    await db.from("pn_upsells").delete().eq("id", up.id);
+    throw err;
+  }
 }
 
 // Para cada adicional: "novo" (outro pet, com arte própria) ou "copia" (mais um igual ao primeiro).
@@ -812,8 +909,10 @@ function settingsView(s: Settings) {
     owner_email: c.ownerEmail,
     store: c.store,
     pickup: c.pickup,
-    extra_prices: c.extraPrices,
+    extra_price_cents: c.extraPrice,
+    extra_max: c.extraMax,
     extra_credits: c.extraCredits,
+    free_shipping_up_to_cents: c.shipping.freeUpTo,
     filaments_text: c.filaments.map((f) => `${f.name} ${f.hex}`).join("\n"),
     filaments: c.filaments,
     model: c.model,
@@ -842,7 +941,7 @@ async function adminOrders(b: Body) {
     orders: (orders ?? []).map((o) => ({
       id: o.id, code: o.code, created_at: o.created_at, paid_at: o.paid_at, confirmed_at: o.confirmed_at,
       name: o.name, email: o.email, whatsapp: o.whatsapp, amount_cents: o.amount_cents,
-      shipping_cents: o.shipping_cents, shipping_label: o.shipping_label, delivery_method: o.delivery_method,
+      shipping_cents: o.shipping_cents, shipping_label: o.shipping_label, shipping_cost_cents: o.shipping_cost_cents, delivery_method: o.delivery_method,
       payment_status: o.payment_status, is_test: o.is_test, mp_payment_id: o.mp_payment_id,
       credits_total: o.credits_total, credits_used: o.credits_used,
       pet_name: o.pet_name, recipient: o.recipient, cep: o.cep, street: o.street, number: o.number,
@@ -903,7 +1002,7 @@ async function adminSaveSettings(b: Body) {
     await saveSetting("max_colors", String(v));
   }
   if (b.test_mode !== undefined) await saveSetting("test_mode", b.test_mode ? "true" : "false");
-  if (typeof b.shipping_mode === "string" && ["incluso", "tabela", "melhor_envio"].includes(b.shipping_mode)) {
+  if (typeof b.shipping_mode === "string" && SHIP_MODES.includes(b.shipping_mode)) {
     await saveSetting("shipping_mode", b.shipping_mode);
   }
   if (b.shipping_table && typeof b.shipping_table === "object") {
@@ -938,9 +1037,20 @@ async function adminSaveSettings(b: Body) {
       await saveSetting("store_whatsapp", w);
     }
   }
-  if (Array.isArray(b.extra_prices)) {
-    const list = b.extra_prices.map((v: unknown) => Math.round(Number(v) || 0)).filter((v: number) => v >= 100 && v <= 1000000).slice(0, 3);
-    await saveSetting("extra_prices", list.join(","));
+  if (b.extra_price_cents !== undefined) {
+    const v = Math.round(Number(b.extra_price_cents) || 0);
+    if (!(v === 0 || (v >= 100 && v <= 1000000))) throw new HttpError(400, "Preço do enfeite adicional inválido.");
+    await saveSetting("extra_price_cents", String(v));
+  }
+  if (b.extra_max !== undefined) {
+    const v = parseInt(b.extra_max, 10);
+    if (!(v >= 0 && v <= 3)) throw new HttpError(400, "Máximo de adicionais: de 0 a 3.");
+    await saveSetting("extra_max", String(v));
+  }
+  if (b.free_shipping_up_to_cents !== undefined) {
+    const v = Math.round(Number(b.free_shipping_up_to_cents) || 0);
+    if (!(v >= 0 && v <= 100000)) throw new HttpError(400, "Valor de frete grátis inválido.");
+    await saveSetting("free_shipping_up_to_cents", String(v));
   }
   if (b.extra_credits !== undefined) {
     const v = parseInt(b.extra_credits, 10);
@@ -1005,6 +1115,7 @@ Deno.serve(async (req) => {
       case "recover": return await recover(body);
       case "choose": return await choose(body);
       case "item-kind": return await itemKind(body);
+      case "add-extras": return await addExtras(body);
       case "confirm": return await confirm(body);
       case "admin-login": return json({ settings: settingsView(await requireAdmin(req)) });
       case "admin-orders": await requireAdmin(req); return await adminOrders(body);
