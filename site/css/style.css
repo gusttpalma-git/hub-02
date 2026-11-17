@@ -132,43 +132,69 @@ section { padding: var(--section) 0; }
 .trust li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
 .notice { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 22px; padding: 10px 16px; border-radius: 14px; background: var(--gold-soft); color: #6a4b0b; font-weight: 800; font-size: 0.98rem; }
 
-/* ── palco da transformação: foto → arte → enfeite 3D ── */
+/* ── palco da transformação: foto → arte → peça 3D → na árvore ── */
 .stage { width: min(460px, 100%); margin-inline: auto; }
 .stage-frame {
   position: relative; aspect-ratio: 1; border-radius: var(--radius-lg); overflow: hidden;
   background: radial-gradient(120% 90% at 50% 0%, #fffdf8 0%, #f3ebdd 100%);
   box-shadow: var(--shadow-lg); border: 1px solid var(--line);
 }
-.stage-layer { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transition: opacity 0.7s ease, transform 0.9s cubic-bezier(.2,.7,.2,1); }
-.stage-layer.on { opacity: 1; }
-.stage-photo img { width: 100%; height: 100%; object-fit: cover; }
-.stage-art { transform: scale(0.94); }
+.stage-layer { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; visibility: hidden; transition: opacity 0.7s ease, transform 0.9s cubic-bezier(.2,.7,.2,1), visibility 0s 0.7s; }
+.stage-layer.on { opacity: 1; visibility: visible; transition: opacity 0.7s ease, transform 0.9s cubic-bezier(.2,.7,.2,1); }
+.stage-photo img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); transition: transform 3s ease; }
+.stage-photo.on img { transform: scale(1); }
+.stage-art { transform: scale(0.92); }
 .stage-art.on { transform: scale(1); }
-.stage-art img { width: 82%; border-radius: 50%; background: #fff; box-shadow: 0 10px 30px rgba(31, 42, 36, 0.12); }
-.stage-3d canvas { width: 100% !important; height: 100% !important; cursor: grab; }
+.stage-art img { width: 80%; border-radius: 50%; background: #fff; box-shadow: 0 10px 30px rgba(31, 42, 36, 0.12); }
+.stage-3d canvas { width: 100% !important; height: 100% !important; cursor: grab; touch-action: pan-y; }
 .stage-3d canvas:active { cursor: grabbing; }
-.stage-3d .fallback { width: 100%; height: 100%; object-fit: cover; }
+.stage-fallback, .stage-tree .mockup { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+.stage-tree { transform: scale(1.06); }
+.stage-tree.on { transform: scale(1); }
 .stage-scan {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0;
-  background: linear-gradient(90deg, transparent 0 46%, rgba(255, 255, 255, 0.9) 50%, transparent 54%);
-  background-size: 220% 100%;
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 2;
+  background: linear-gradient(90deg, transparent 0 44%, rgba(255, 255, 255, 0.95) 50%, transparent 56%);
+  background-size: 240% 100%;
 }
 .stage-scan.run { animation: scan 0.9s ease forwards; }
-@keyframes scan { 0% { opacity: 1; background-position: 120% 0; } 100% { opacity: 1; background-position: -20% 0; } }
-.stage-tag {
-  position: absolute; left: 16px; top: 16px; padding: 7px 13px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92); color: var(--pine-deep); font: 800 0.88rem var(--font-body);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+@keyframes scan { 0% { opacity: 1; background-position: 130% 0; } 100% { opacity: 1; background-position: -30% 0; } }
+
+/* barras de progresso (como "stories"): mostram que a apresentação anda sozinha */
+.stage-bars { position: absolute; z-index: 3; top: 12px; left: 14px; right: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.stage-bars i { position: relative; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.7); overflow: hidden; box-shadow: 0 0 0 1px rgba(31, 42, 36, 0.12), 0 1px 3px rgba(0, 0, 0, 0.15); }
+.stage-bars i::after { content: ""; position: absolute; inset: 0; background: var(--berry); transform: scaleX(0); transform-origin: left; }
+.stage-bars i.done::after { transform: scaleX(1); }
+.stage-bars i.run::after { animation: fill var(--dur, 3s) linear forwards; }
+.stage-bars i.hold::after { transform: scaleX(1); opacity: 0.9; }
+@keyframes fill { to { transform: scaleX(1); } }
+
+.stage-nav {
+  position: absolute; z-index: 3; top: 50%; width: 46px; height: 46px; margin-top: -23px; border-radius: 50%;
+  border: 0; cursor: pointer; background: rgba(255, 255, 255, 0.92); color: var(--pine-deep);
+  font: 700 1.9rem/1 var(--font-body); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  display: grid; place-items: center; padding-bottom: 4px;
 }
-.stage-hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-weight: 700; font-size: 0.85rem; color: var(--muted); }
-.stage-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; list-style: none; margin: 16px 0 0; padding: 0; }
+.stage-nav.prev { left: 10px; }
+.stage-nav.next { right: 10px; }
+.stage-nav:hover { background: #fff; }
+.stage-hint {
+  position: absolute; z-index: 3; bottom: 14px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  padding: 8px 14px; border-radius: 999px; background: rgba(18, 55, 38, 0.86); color: #fff; font-weight: 800; font-size: 0.9rem;
+  animation: nudge 1.6s ease-in-out infinite;
+}
+@keyframes nudge { 0%, 100% { transform: translateX(-50%); } 50% { transform: translateX(calc(-50% + 8px)); } }
+
+.stage-caption { display: flex; gap: 14px; align-items: flex-start; margin: 18px 4px 0; min-height: 66px; }
+.stage-num { flex: none; width: 38px; height: 38px; border-radius: 50%; background: var(--berry); color: #fff; display: grid; place-items: center; font: 800 1.1rem var(--font-body); }
+.stage-caption strong { display: block; font: 600 1.2rem/1.25 var(--font-title); color: var(--ink); }
+.stage-caption span { color: var(--muted); font-size: 1rem; }
+.stage-caption .stage-num { color: #fff; font-size: 1.1rem; }
+.stage-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; list-style: none; margin: 12px 0 0; padding: 0; }
 .stage-steps button {
-  width: 100%; padding: 10px 6px 0; background: none; border: 0; cursor: pointer; text-align: center;
-  font: 800 0.92rem var(--font-body); color: var(--muted);
+  width: 100%; min-height: 44px; padding: 8px 4px; border-radius: 999px; cursor: pointer; text-align: center;
+  background: var(--surface); border: 1.5px solid var(--line); font: 800 0.88rem var(--font-body); color: var(--muted);
 }
-.stage-steps button::before { content: ""; display: block; height: 4px; border-radius: 4px; background: var(--line); margin-bottom: 8px; overflow: hidden; }
-.stage-steps button.on { color: var(--pine-deep); }
-.stage-steps button.on::before { background: var(--pine); }
+.stage-steps button.on { background: var(--pine); border-color: var(--pine); color: #fff; }
 
 /* ── como funciona ── */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; counter-reset: s; }
@@ -199,6 +225,48 @@ section { padding: var(--section) 0; }
 .specs li { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 14px 0; border-top: 1px solid rgba(255, 255, 255, 0.14); }
 .specs li:last-child { border-bottom: 1px solid rgba(255, 255, 255, 0.14); }
 .specs b { color: var(--gold); font-weight: 800; }
+
+/* ── galeria: polaroides espalhadas e sobrepostas ── */
+.gallery-sec { overflow: hidden; }
+.polaroids { position: relative; width: min(560px, 100%); margin: 0 auto; aspect-ratio: 1 / 1.32; }
+.polaroid {
+  position: absolute; margin: 0; padding: 3.2% 3.2% 0; background: #fff; border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(31, 42, 36, 0.08), 0 18px 34px rgba(31, 42, 36, 0.18);
+  transform: rotate(var(--r)); transition: transform 0.5s cubic-bezier(.2,.8,.2,1), box-shadow 0.3s, opacity 0.6s;
+}
+.polaroid button { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.polaroid img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 2px; background: #eee; }
+.polaroid figcaption { padding: 6px 4px 10px; text-align: center; font: 600 clamp(0.85rem, 3.4vw, 1.05rem) var(--font-title); color: var(--ink); }
+.polaroid:hover, .polaroid:focus-within { transform: rotate(0deg) scale(1.04); z-index: 9 !important; box-shadow: 0 30px 50px rgba(31, 42, 36, 0.25); }
+/* posições no celular (a maioria dos clientes) */
+.p1 { left: 1%;  top: 0;   width: 52%; --r: -6deg; z-index: 2; }
+.p2 { left: 46%; top: 3%;  width: 52%; --r: 5deg;  z-index: 1; }
+.p3 { left: 21%; top: 27%; width: 56%; --r: -2deg; z-index: 6; }
+.p4 { left: 0;   top: 51%; width: 50%; --r: 4deg;  z-index: 3; }
+.p5 { left: 48%; top: 52%; width: 50%; --r: -5deg; z-index: 5; }
+/* entrada suave ao rolar a página */
+.polaroids.wait .polaroid { opacity: 0; transform: rotate(calc(var(--r) * 2.2)) translateY(30px) scale(0.94); }
+.polaroids .polaroid:nth-child(2) { transition-delay: 0.08s; }
+.polaroids .polaroid:nth-child(3) { transition-delay: 0.16s; }
+.polaroids .polaroid:nth-child(4) { transition-delay: 0.24s; }
+.polaroids .polaroid:nth-child(5) { transition-delay: 0.32s; }
+.polaroids.ready .polaroid { transition-delay: 0s; }
+
+.lightbox { width: min(560px, calc(100% - 20px)); background: var(--surface); }
+.lightbox figure { margin: 0; padding: 14px 14px 0; }
+.lightbox img { width: 100%; max-height: 72vh; object-fit: contain; border-radius: 10px; background: #f3eee5; }
+.lightbox figcaption { text-align: center; padding: 10px 0 0; font: 600 1.15rem var(--font-title); }
+.lightbox .close { z-index: 2; background: rgba(255, 255, 255, 0.9); border-radius: 50%; top: 20px; right: 20px; width: 44px; height: 44px; line-height: 1; }
+.lb-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px 16px; }
+
+@media (min-width: 760px) {
+  .polaroids { width: 100%; aspect-ratio: 2.4 / 1; }
+  .p1 { left: 1%;  top: 8%;  width: 22%; }
+  .p2 { left: 20%; top: 30%; width: 21%; }
+  .p3 { left: 39%; top: 2%;  width: 23%; }
+  .p4 { left: 58%; top: 28%; width: 21%; }
+  .p5 { left: 77%; top: 6%;  width: 21%; }
+}
 
 /* ── comprar ── */
 .buy { display: grid; gap: 24px; align-items: start; }
@@ -385,5 +453,6 @@ dialog .close { position: absolute; top: 8px; right: 10px; width: 48px; height: 
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .stage-layer, .stage-scan.run { transition: none; animation: none; }
+  .stage-layer, .stage-scan.run, .stage-hint, .polaroid { transition: none; animation: none; }
+  .polaroids.wait .polaroid { opacity: 1; transform: rotate(var(--r)); }
 }

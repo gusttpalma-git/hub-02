@@ -164,7 +164,7 @@ function cfg(s: Settings) {
     filaments: parseFilaments(s.filaments),
     model: {
       diameter: num(s.model_diameter, 70, 40, 120),
-      base: num(s.model_base, 2.4, 1.2, 5),
+      base: num(s.model_base, 3.2, 1.2, 5),
       band: num(s.model_band, 0.4, 0.2, 1.2),
     },
     shipping: {
@@ -851,7 +851,7 @@ async function adminSaveSettings(b: Body) {
   if (b.model && typeof b.model === "object") {
     const m = b.model;
     if (m.diameter !== undefined) await saveSetting("model_diameter", String(num(m.diameter, 70, 40, 120)));
-    if (m.base !== undefined) await saveSetting("model_base", String(num(m.base, 2.4, 1.2, 5)));
+    if (m.base !== undefined) await saveSetting("model_base", String(num(m.base, 3.2, 1.2, 5)));
     if (m.band !== undefined) await saveSetting("model_band", String(num(m.band, 0.4, 0.2, 1.2)));
   }
   if (b.package_cm && typeof b.package_cm === "object") {

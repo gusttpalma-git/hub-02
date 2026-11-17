@@ -6,7 +6,7 @@ insert into public.pn_settings (key, value) values
   ('package_width', '11'),
   ('package_height', '2'),
   ('model_diameter', '70'),
-  ('model_base', '2.4'),
+  ('model_base', '3.2'),
   ('model_band', '0.4')
 on conflict (key) do nothing;
 

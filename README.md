@@ -84,6 +84,27 @@ de exemplo. **Desligue o modo de teste antes de divulgar o site.**
   O CEP é conferido antes do pagamento.
 - **Embalagem**: 16 × 11 × 2 cm e 50 g por padrão, dentro do Mini Envios dos Correios.
 
+### Galeria de fotos reais
+
+A seção "Feitos aqui, um por um" mostra 5 fotos em `site/img/galeria-1.jpg` … `galeria-5.jpg`.
+As imagens que estão lá hoje são renderizações provisórias: substitua pelas fotos das suas peças com os
+mesmos nomes (formato retrato, 4:5, cerca de 800 × 1000 px). As legendas ficam no `index.html`,
+procurando por `polaroid`.
+
+### Imprimindo no Bambu Studio
+
+- **3MF**: cada parte já vem no seu filamento (slot 1 = branco, depois as cores). O Bambu ainda mostra o
+  aviso "não é do Bambu Lab, carregue apenas dados de geometria" (é normal para 3MF de outros programas);
+  confira as cores dos slots na lista de filamentos.
+- **Plano B, que funciona em qualquer fatiador**: no zip de STLs, abra só `0-peca-unica.stl` e adicione a
+  troca de filamento nas alturas indicadas no `LEIA-ME.txt` (cada faixa de altura tem uma cor só).
+
+### WhatsApp ao concluir
+
+Quando o cliente confirma o endereço, o site abre uma janela e leva para o WhatsApp da loja com o resumo
+do pedido (código, pet, link da arte, endereço, observações e valor). Precisa do WhatsApp preenchido em
+Configurações → Contato e dados da loja.
+
 ## Dia a dia
 
 1. O pedido aparece em **Para produzir** quando o cliente escolhe a arte e confirma o endereço.

@@ -19,7 +19,9 @@
 
   const DEFAULTS = {
     diameter: 70,      // mm — diâmetro do disco
-    base: 2.4,         // mm — espessura da base branca
+    base: 3.2,         // mm — espessura da base branca
+    roundBottom: 1.2,  // mm — arredondado da borda de baixo
+    roundTop: 0.8,     // mm — arredondado da borda de cima da base
     band: 0.4,         // mm — altura de cada faixa de cor (2 camadas de 0,2)
     engrave: 0.6,      // mm — profundidade da gravação no fundo
     cell: 0.15,        // mm — resolução da malha
@@ -171,7 +173,7 @@
     const fit = (text, weight, maxSize, maxWidth) => {
       let size = maxSize;
       do {
-        ctx.font = `${weight} ${px(size)}px "Baloo 2", "Nunito", Arial, sans-serif`;
+        ctx.font = `${weight} ${px(size)}px "Nunito", "Arial Rounded MT Bold", Arial, sans-serif`;
         if (ctx.measureText(text).width <= px(maxWidth)) break;
         size -= 0.5;
       } while (size > 4);
@@ -375,6 +377,104 @@
     return mesh;
   }
 
+  // ───────────────────────── base lisa (contorno geométrico) ─────────────────────────
+
+  // Contorno do disco + alça, calculado direto da geometria (sem serrilhado), anti-horário.
+  function outlinePath(R, tw, holeY) {
+    const pts = [];
+    const yj = Math.sqrt(R * R - tw * tw);
+    const aR = Math.atan2(yj, tw);                 // junção direita
+    const aL = Math.PI - aR;                       // junção esquerda
+    const span = Math.PI * 2 - (aL - aR);
+    const n = Math.max(240, Math.ceil(span / (Math.PI / 360)));
+    for (let i = 0; i <= n; i++) {
+      const a = aL + (span * i) / n;
+      pts.push([R * Math.cos(a), R * Math.sin(a)]);
+    }
+    // lado direito da alça (subindo), meia-lua no topo, lado esquerdo (descendo)
+    const side = 8;
+    for (let i = 1; i <= side; i++) pts.push([tw, yj + ((holeY - yj) * i) / side]);
+    const arc = 48;
+    for (let i = 1; i < arc; i++) { const a = (Math.PI * i) / arc; pts.push([tw * Math.cos(a), holeY + tw * Math.sin(a)]); }
+    for (let i = 0; i < side; i++) pts.push([-tw, holeY - ((holeY - yj) * i) / side]);
+    return pts;
+  }
+
+  // Desloca o contorno para dentro (normal de cada ponto).
+  function inset(path, d) {
+    if (!d) return path.map((p) => p.slice());
+    const n = path.length;
+    return path.map((p, i) => {
+      const a = path[(i - 1 + n) % n], b = path[(i + 1) % n];
+      let tx = b[0] - a[0], ty = b[1] - a[1];
+      const l = Math.hypot(tx, ty) || 1;
+      tx /= l; ty /= l;
+      return [p[0] - ty * d, p[1] + tx * d];
+    });
+  }
+
+  function circlePath(cx, cy, r, n, clockwise) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = ((clockwise ? -1 : 1) * Math.PI * 2 * i) / n;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+    return pts;
+  }
+
+  // Laje com borda externa lisa e arredondada (contorno muda com a altura), furos verticais.
+  function roundedSlab(mesh, path, profile, zs, holes) {
+    const earcut = window.earcut;
+    const base = mesh.pos.length / 3;
+    const n = path.length;
+    const rings = zs.map((z) => {
+      const ring = inset(path, profile(z));
+      const start = mesh.pos.length / 3;
+      for (const q of ring) mesh.pos.push(q[0], q[1], z);
+      return { start, ring };
+    });
+    for (let k = 0; k < rings.length - 1; k++) {
+      const lo = rings[k].start, hi = rings[k + 1].start;
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        mesh.idx.push(lo + i, lo + j, hi + j, lo + i, hi + j, hi + i);
+      }
+    }
+    // furos (o furo da alça e as letras gravadas): paredes verticais
+    const z0 = zs[0], z1 = zs[zs.length - 1];
+    const holeIdx = holes.map((h) => {
+      const b = mesh.pos.length / 3;
+      for (const q of h) mesh.pos.push(q[0], q[1], z0);
+      for (const q of h) mesh.pos.push(q[0], q[1], z1);
+      const m = h.length;
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % m;
+        mesh.idx.push(b + i, b + j, b + m + j, b + i, b + m + j, b + m + i);
+      }
+      return { bottom: b, top: b + m, m };
+    });
+    // tampas de baixo e de cima
+    const cap = (ringInfo, top) => {
+      const flat = [], holeStarts = [], ids = [];
+      for (let i = 0; i < n; i++) { flat.push(ringInfo.ring[i][0], ringInfo.ring[i][1]); ids.push(ringInfo.start + i); }
+      holes.forEach((h, hi) => {
+        holeStarts.push(ids.length);
+        h.forEach((q, i) => { flat.push(q[0], q[1]); ids.push((top ? holeIdx[hi].top : holeIdx[hi].bottom) + i); });
+      });
+      const tri = earcut(flat, holeStarts.length ? holeStarts : null, 2);
+      for (let t = 0; t < tri.length; t += 3) {
+        let a = tri[t], b = tri[t + 1], c = tri[t + 2];
+        const cross = (flat[b * 2] - flat[a * 2]) * (flat[c * 2 + 1] - flat[a * 2 + 1]) - (flat[b * 2 + 1] - flat[a * 2 + 1]) * (flat[c * 2] - flat[a * 2]);
+        if ((cross < 0) === top) { const s = b; b = c; c = s; }
+        mesh.idx.push(ids[a], ids[b], ids[c]);
+      }
+    };
+    cap(rings[0], false);
+    cap(rings[rings.length - 1], true);
+    void base;
+    return mesh;
+  }
+
   // ───────────────────────── montagem da peça ─────────────────────────
 
   async function build(src, options) {
@@ -495,10 +595,30 @@
     };
 
     const whiteColor = pal[white];
-    const bottomMask = new Uint8Array(w * h);
-    for (let k = 0; k < w * h; k++) bottomMask[k] = shape[k] && !text[k] ? 1 : 0;
-    add("fundo", whiteColor, extrude(newMesh(), polysOf(bottomMask), 0, o.engrave), 0, o.engrave);
-    add("base", whiteColor, extrude(newMesh(), polysOf(shape), o.engrave, o.base), o.engrave, o.base);
+    // Base: contorno liso (geométrico), borda de baixo e de cima arredondadas.
+    const outline = outlinePath(R, tabW, holeY);
+    const fb = Math.min(o.roundBottom, o.base / 2), ft = Math.min(o.roundTop, o.base / 3);
+    const profile = (z) => {
+      if (z < fb) return fb - Math.sqrt(Math.max(0, fb * fb - (fb - z) ** 2));
+      const t0 = o.base - ft;
+      if (z > t0) return ft - Math.sqrt(Math.max(0, ft * ft - (z - t0) ** 2));
+      return 0;
+    };
+    const steps = (a, b) => {
+      const zs = [a];
+      for (let z = a + 0.1; z < b - 0.05; z += 0.1) if (z < fb || z > o.base - ft) zs.push(+z.toFixed(3));
+      zs.push(b);
+      return zs;
+    };
+    const hole = circlePath(0, holeY, holeR, 40, true);
+    // letras gravadas no fundo: viram furos rasos; o miolo das letras (ex.: "o") fica como ilha
+    const textPolys = polysOf(text);
+    const letterHoles = textPolys.map((p) => p.outer.slice().reverse());
+    const counters = textPolys.flatMap((p) => p.holes.map((h) => ({ outer: h.slice().reverse(), holes: [] })));
+    const fundo = roundedSlab(newMesh(), outline, profile, steps(0, o.engrave), [hole, ...letterHoles]);
+    if (counters.length) extrude(fundo, counters, 0, o.engrave);
+    add("fundo", whiteColor, fundo, 0, o.engrave);
+    add("base", whiteColor, roundedSlab(newMesh(), outline, profile, steps(o.engrave, o.base), [hole]), o.engrave, o.base);
 
     let level = 0;
     order.forEach((id, r) => {
@@ -540,27 +660,70 @@
     return new Uint8Array(buf);
   }
 
-  function to3MFModel(model, title) {
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    const out = [];
-    out.push('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="pt-BR" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">');
-    out.push(`<metadata name="Title">${esc(title)}</metadata><metadata name="Application">Patinha de Natal</metadata>`);
-    out.push('<resources><basematerials id="1">');
-    model.parts.forEach((p) => out.push(`<base name="${esc(p.name)}" displaycolor="${p.hex.toUpperCase()}FF"/>`));
-    out.push("</basematerials>");
-    model.parts.forEach((p, i) => {
-      const P = p.positions, I = p.indices;
-      const v = [], t = [];
-      for (let k = 0; k < P.length; k += 3) v.push(`<vertex x="${P[k].toFixed(3)}" y="${P[k + 1].toFixed(3)}" z="${P[k + 2].toFixed(3)}"/>`);
-      for (let k = 0; k < I.length; k += 3) t.push(`<triangle v1="${I[k]}" v2="${I[k + 1]}" v3="${I[k + 2]}"/>`);
-      out.push(`<object id="${i + 2}" name="${esc(p.name + " - " + p.label)}" type="model" pid="1" pindex="${i}"><mesh><vertices>${v.join("")}</vertices><triangles>${t.join("")}</triangles></mesh></object>`);
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx".replace(/x/g, () => ((Math.random() * 16) | 0).toString(16)));
+  const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"';
+
+  function meshXML(id, name, P, I) {
+    const v = [], t = [];
+    for (let k = 0; k < P.length; k += 3) v.push(`<vertex x="${P[k].toFixed(3)}" y="${P[k + 1].toFixed(3)}" z="${P[k + 2].toFixed(3)}"/>`);
+    for (let k = 0; k < I.length; k += 3) t.push(`<triangle v1="${I[k]}" v2="${I[k + 1]}" v3="${I[k + 2]}"/>`);
+    return `<object id="${id}" name="${esc(name)}" type="model"><mesh><vertices>${v.join("")}</vertices><triangles>${t.join("")}</triangles></mesh></object>`;
+  }
+
+  // Filamento de cada parte: partes da mesma cor dividem o mesmo slot (1, 2, 3…).
+  function slots(model) {
+    const order = [];
+    const slotOf = model.parts.map((p) => {
+      const key = p.hex.toLowerCase();
+      let i = order.findIndex((o) => o.key === key);
+      if (i < 0) { order.push({ key, hex: p.hex.toUpperCase(), name: p.name }); i = order.length - 1; }
+      return i + 1;
     });
-    const parent = model.parts.length + 2;
-    out.push(`<object id="${parent}" name="${esc(title)}" type="model"><components>`);
-    model.parts.forEach((_, i) => out.push(`<component objectid="${i + 2}"/>`));
-    out.push("</components></object></resources>");
-    out.push(`<build><item objectid="${parent}" transform="1 0 0 0 1 0 0 0 1 128 128 0"/></build></model>`);
-    return out.join("\n");
+    return { order, slotOf };
+  }
+
+  // 3MF no formato que o Bambu Studio / Orca leem com cada parte já no seu filamento:
+  // uma malha por parte em 3D/Objects, montagem por componentes e Metadata/model_settings.config.
+  function files3MF(model, title) {
+    const N = model.parts.length;
+    const parent = N + 1;
+    const { order, slotOf } = slots(model);
+    const files = [
+      { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>' },
+      { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>' },
+    ];
+    const comps = model.parts.map((_, i) => `<component p:path="/3D/Objects/object_${i + 1}.model" objectid="${i + 1}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>`).join("");
+    files.push({ name: "3D/3dmodel.model", data: `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="pt-BR" ${NS} requiredextensions="p">` +
+      `<metadata name="Application">Patinha de Natal</metadata><metadata name="Title">${esc(title)}</metadata>` +
+      `<resources><object id="${parent}" name="${esc(title)}" type="model" p:UUID="${uuid()}"><components>${comps}</components></object></resources>` +
+      `<build p:UUID="${uuid()}"><item objectid="${parent}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 128 128 0" printable="1"/></build></model>` });
+    files.push({ name: "3D/_rels/3dmodel.model.rels", data: '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      model.parts.map((_, i) => `<Relationship Target="/3D/Objects/object_${i + 1}.model" Id="rel-${i + 1}" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>`).join("") + "</Relationships>" });
+    model.parts.forEach((p, i) => {
+      files.push({ name: `3D/Objects/object_${i + 1}.model`, data: `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="pt-BR" ${NS}><resources>${meshXML(i + 1, p.name + " - " + p.label, p.positions, p.indices)}</resources><build/></model>` });
+    });
+    const parts = model.parts.map((p, i) => `<part id="${i + 1}" subtype="normal_part"><metadata key="name" value="${esc(p.name + " - " + p.label)}"/><metadata key="extruder" value="${slotOf[i]}"/></part>`).join("");
+    files.push({ name: "Metadata/model_settings.config", data: `<?xml version="1.0" encoding="UTF-8"?>\n<config><object id="${parent}"><metadata key="name" value="${esc(title)}"/><metadata key="extruder" value="1"/>${parts}</object>` +
+      `<plate><metadata key="plater_id" value="1"/><metadata key="plater_name" value=""/><metadata key="locked" value="false"/><model_instance><metadata key="object_id" value="${parent}"/><metadata key="instance_id" value="0"/></model_instance></plate></config>` });
+    files.push({ name: "Metadata/project_settings.config", data: JSON.stringify({ filament_colour: order.map((o) => o.hex) }, null, 4) });
+    return files;
+  }
+
+  // Todas as partes numa malha só: para imprimir trocando o filamento por altura em qualquer fatiador.
+  function mergedPart(model) {
+    let count = 0;
+    model.parts.forEach((p) => { count += p.positions.length; });
+    const positions = new Float32Array(count);
+    const idx = [];
+    let off = 0;
+    model.parts.forEach((p) => {
+      positions.set(p.positions, off);
+      const base = off / 3;
+      for (const v of p.indices) idx.push(v + base);
+      off += p.positions.length;
+    });
+    return { name: "Peça única", positions, indices: new Uint32Array(idx) };
   }
 
   // ZIP mínimo (usado para o 3MF e para o pacote de STLs).
@@ -606,36 +769,41 @@
   }
 
   async function export3MF(model, title) {
-    const blob = await zip([
-      { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>' },
-      { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>' },
-      { name: "3D/3dmodel.model", data: to3MFModel(model, title) },
-    ]);
+    const blob = await zip(files3MF(model, title));
     return new Blob([blob], { type: "model/3mf" });
   }
 
   const slug = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "cor";
 
   function guide(model, title) {
+    const { order, slotOf } = slots(model);
     const lines = [
       title,
       "",
       `Diâmetro: ${model.size.diameter} mm · Altura total: ${model.size.height} mm`,
       "",
-      "Como imprimir:",
-      "1. Arraste TODOS os arquivos .stl juntos para o fatiador (Bambu Studio, Orca ou Prusa).",
-      "2. Quando perguntar, aceite carregar como UM objeto com várias partes.",
-      "3. Atribua a cada parte o filamento do nome do arquivo.",
-      "4. O fundo (nome e marca gravados) já fica virado para a mesa.",
+      "OPÇÃO A — peça única + troca de filamento por altura (funciona em qualquer fatiador):",
+      "1. Abra só o arquivo 0-peca-unica.stl.",
+      "2. Na barra de camadas, adicione a troca de filamento nas alturas abaixo.",
       "",
-      "Cor por altura (uma cor por camada, troque o filamento nessas alturas):",
+      "OPÇÃO B — partes coloridas (Bambu Studio, Orca, Prusa):",
+      "1. Arraste os arquivos numerados (1-, 2-, 3-…) juntos para o fatiador.",
+      "2. Aceite carregar como UM objeto com várias partes.",
+      "3. Atribua a cada parte o filamento do nome do arquivo.",
+      "   (o .3mf baixado do painel já vem com as partes nos filamentos:",
+      "    " + order.map((o, i) => `slot ${i + 1} = ${o.name} ${o.hex}`).join(", ") + ")",
+      "",
+      "O fundo (nome e marca gravados) já fica virado para a mesa.",
+      "",
+      "Cor por altura (uma cor por camada):",
     ];
-    model.parts.forEach((p) => lines.push(`  ${p.from.toFixed(2)} mm → ${p.to.toFixed(2)} mm: ${p.name} (${p.label})`));
+    model.parts.forEach((p, i) => lines.push(`  ${p.from.toFixed(2)} mm → ${p.to.toFixed(2)} mm: ${p.name} (slot ${slotOf[i]})`));
     return lines.join("\r\n");
   }
 
   async function exportSTLZip(model, title) {
-    const files = model.parts.map((p, i) => ({ name: `${i + 1}-${slug(p.name)}-${slug(p.label)}.stl`, data: toSTL(p) }));
+    const files = [{ name: "0-peca-unica.stl", data: toSTL(mergedPart(model), "peca unica") }];
+    model.parts.forEach((p, i) => files.push({ name: `${i + 1}-${slug(p.name)}-${slug(p.label)}.stl`, data: toSTL(p) }));
     files.push({ name: "LEIA-ME.txt", data: guide(model, title) });
     return zip(files);
   }
@@ -666,7 +834,7 @@
     const scene = new THREE.Scene();
     if (o.background) scene.background = new THREE.Color(o.background);
     const camera = new THREE.PerspectiveCamera(30, width() / height(), 1, 1000);
-    const fit = model.size.diameter * 2.35;
+    const fit = model.size.diameter * 2.35 * (o.zoom || 1);
     camera.position.set(0, 0, fit);
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 1.6));
@@ -676,6 +844,9 @@
     const rim = new THREE.DirectionalLight(0xfff1dd, 0.9);
     rim.position.set(60, -30, -60);
     scene.add(rim);
+    const back = new THREE.DirectionalLight(0xffffff, 1.5);   // ilumina o verso (nome gravado)
+    back.position.set(-50, 70, -90);
+    scene.add(back);
 
     const group = new THREE.Group();
     model.parts.forEach((p) => {
@@ -696,7 +867,7 @@
 
     // Parado, o enfeite balança de leve, sempre de frente; arrastando, gira livre
     // (dá para ver o verso) e depois volta devagar para a frente.
-    let offY = 0, offX = 0, vel = 0, dragging = false, lastX = 0, lastY = 0, alive = true, idle = 0, clock = 0;
+    let offY = (o.pose && o.pose.y) || 0, offX = (o.pose && o.pose.x) || 0, vel = 0, dragging = false, lastX = 0, lastY = 0, alive = true, idle = 0, clock = 0;
     const el = renderer.domElement;
     el.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; el.setPointerCapture(e.pointerId); });
     el.addEventListener("pointermove", (e) => {
@@ -704,6 +875,7 @@
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
       offY += dx * 0.012; offX = Math.max(-0.9, Math.min(0.9, offX + dy * 0.008));
+      loop();
       vel = dx * 0.012; idle = 0;
     });
     const up = () => { dragging = false; };
@@ -711,16 +883,25 @@
     el.addEventListener("pointercancel", up);
 
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Só desenha quando está visível na tela (economiza bateria no celular).
+    let visible = true, running = false;
     let t0 = performance.now();
+    const loop = () => {
+      if (running || !alive) return;
+      running = true;
+      t0 = performance.now();
+      requestAnimationFrame(tick);
+    };
     const tick = (now) => {
       if (!alive) return;
+      if (!visible || document.hidden) { running = false; return; }
       const dt = Math.min(0.05, (now - t0) / 1000);
       t0 = now;
       if (!dragging) {
         idle += dt;
         vel *= 0.92;
         offY += vel;
-        if (idle > 2.5) {
+        if (idle > 2.5 && !o.hold) {
           // volta para a frente pelo caminho mais curto
           const full = Math.PI * 2;
           offY = ((offY % full) + full + Math.PI) % full - Math.PI;
@@ -733,7 +914,14 @@
       renderer.render(scene, camera);
       requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
+    loop();
+    const io = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting && e.intersectionRatio > 0;
+      if (visible) loop();
+    }) : null;
+    if (io) io.observe(container);
+    const onVis = () => { if (!document.hidden) loop(); };
+    document.addEventListener("visibilitychange", onVis);
 
     const onResize = () => {
       renderer.setSize(width(), height());
@@ -747,6 +935,8 @@
       destroy() {
         alive = false;
         if (ro) ro.disconnect();
+        if (io) io.disconnect();
+        document.removeEventListener("visibilitychange", onVis);
         renderer.dispose();
         group.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
       },

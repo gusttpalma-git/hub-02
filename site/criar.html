@@ -170,12 +170,24 @@
         <div class="summary" id="done-address"></div>
         <p style="margin:18px 0 0"><button class="linklike" type="button" id="edit-address" hidden>Corrigir o endereço</button></p>
         <div class="summary" id="done-notes" hidden style="margin-top:12px"></div>
-        <a class="btn green block" style="margin-top:14px" data-support hidden target="_blank" rel="noopener">💬 Pedir ajuda no WhatsApp</a>
+        <a class="btn green block" style="margin-top:14px" id="wa-summary" hidden target="_blank" rel="noopener">💬 Enviar o resumo no WhatsApp</a>
+        <p class="center" style="margin:10px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">Preciso de ajuda com o pedido</a></p>
         <p class="small muted" style="margin:18px 0 0">Guarde esta página: é por aqui que você acompanha o envio.</p>
       </div>
     </section>
 
   </main>
+
+  <dialog id="wa-dialog" aria-label="Enviar resumo pelo WhatsApp">
+    <div class="inner center">
+      <div style="font-size:3rem;line-height:1">🎉</div>
+      <h3 style="margin-top:10px">Pedido confirmado!</h3>
+      <p class="muted">Agora envie o resumo do pedido pelo nosso WhatsApp. Assim a gente confirma tudo com você e você acompanha por lá.</p>
+      <a class="btn green block" id="wa-go" target="_blank" rel="noopener">💬 Abrir o WhatsApp</a>
+      <p class="small muted" id="wa-count" style="margin:12px 0 0" aria-live="polite"></p>
+      <p style="margin:6px 0 0"><button class="linklike" type="button" id="wa-later">Agora não</button></p>
+    </div>
+  </dialog>
 
   <dialog id="tips">
     <button class="close" type="button" aria-label="Fechar" data-close>×</button>

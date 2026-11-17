@@ -76,6 +76,59 @@
   }
   PN.ready.then(updateSupport);
 
+  // Resumo do pedido pronto para mandar no WhatsApp da loja (o dono controla tudo por lá).
+  function summaryText(o) {
+    const art = o.generations.find((g) => g.id === o.chosen_generation);
+    const a = o.address || {};
+    const lines = [
+      "Olá! Acabei de fazer o pedido " + o.code + " 🎄",
+      "",
+      "Pet: " + (o.pet_name || "(sem nome no verso)"),
+      art && art.share_url ? "Arte escolhida: " + art.share_url : "",
+      "",
+      "Entrega para: " + (a.recipient || ""),
+      [a.street && a.street + ", " + a.number, a.complement].filter(Boolean).join(" — "),
+      [a.district, a.city && a.city + "/" + a.state].filter(Boolean).join(" · "),
+      a.cep ? "CEP " + PN.maskCep(a.cep) : "",
+      o.customer_notes ? "\nObservações: " + o.customer_notes : "",
+      o.amount_cents ? "\nValor pago: " + PN.money(o.amount_cents) : "",
+    ];
+    return lines.filter((l, i, arr) => l !== "" || (arr[i - 1] !== "" && i > 0)).join("\n").replace(/\n{3,}/g, "\n\n");
+  }
+
+  function updateSummary() {
+    const o = state.order;
+    const btn = $("#wa-summary");
+    const link = o && o.confirmed ? PN.whatsappLink(summaryText(o)) : null;
+    btn.hidden = !link;
+    if (link) btn.href = link;
+    return link;
+  }
+
+  // Logo depois de confirmar: convida e leva para o WhatsApp em alguns segundos.
+  function offerWhatsApp() {
+    const link = updateSummary();
+    if (!link) return;
+    const key = "pn_wa_" + state.order.code;
+    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch (_) { /* modo privado */ }
+    const dlg = $("#wa-dialog");
+    const go = $("#wa-go");
+    go.href = link;
+    let left = 5;
+    const tick = () => {
+      $("#wa-count").textContent = left > 0 ? `Abrindo o WhatsApp em ${left}…` : "Abrindo o WhatsApp…";
+      if (left <= 0) { clearInterval(t); dlg.close(); location.href = link; }
+      left--;
+    };
+    const t = setInterval(tick, 1000);
+    tick();
+    const stop = () => { clearInterval(t); $("#wa-count").textContent = ""; };
+    go.addEventListener("click", () => { stop(); dlg.close(); }, { once: true });
+    $("#wa-later").onclick = () => { stop(); dlg.close(); };
+    dlg.addEventListener("cancel", stop, { once: true });
+    dlg.showModal();
+  }
+
   function render() {
     const o = state.order;
     clearTimeout(state.timer);
@@ -272,6 +325,7 @@
       document.createTextNode(a.recipient), document.createElement("br"),
       document.createTextNode(a.street + ", " + a.number + (a.complement ? " — " + a.complement : "")), document.createElement("br"),
       document.createTextNode(a.district + " · " + a.city + "/" + a.state + " · CEP " + PN.maskCep(a.cep)));
+    PN.ready.then(updateSummary);
     const notes = $("#done-notes");
     notes.hidden = !o.customer_notes;
     notes.replaceChildren();
@@ -514,6 +568,7 @@
       state.step = "studio";
       render();
       window.scrollTo(0, 0);
+      PN.ready.then(offerWhatsApp);
     } catch (err) {
       setError("#address-error", err.message);
     } finally {
