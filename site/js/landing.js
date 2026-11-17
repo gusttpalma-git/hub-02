@@ -25,6 +25,10 @@
     state.freeUpTo = c.free_shipping_up_to_cents;
     renderDeadlines(c.regions || []);
     if (c.extra_price_cents) document.querySelectorAll("[data-extra-price]").forEach((el) => { el.textContent = PN.money(c.extra_price_cents); });
+    state.extraPrice = c.extra_max > 0 ? c.extra_price_cents || 0 : 0;
+    $("#qty").hidden = !state.extraPrice;
+    $("#qty2-total").textContent = PN.money(c.price_cents + state.extraPrice);
+    updateTotals();
     if (state.freeUpTo) document.querySelectorAll("[data-free-up]").forEach((el) => { el.textContent = PN.money(state.freeUpTo); });
     if (c.pickup) {
       $("#delivery").hidden = false;
@@ -60,21 +64,28 @@
 
   // ───────── valor do pedido: enfeite + frete ─────────
 
-  const state = { price: 4990, mode: "incluso", calcShipping: false, freeUpTo: null, quotedCep: "", cepError: "", shipping: 0, days: null };
+  const state = { price: 4990, mode: "incluso", calcShipping: false, freeUpTo: null, quotedCep: "", cepError: "", shipping: 0, days: null, extraPrice: 0 };
+  const extras = () => (state.extraPrice && (form.querySelector("input[name=qty]:checked") || {}).value === "1" ? 1 : 0);
   const delivery = () => (form.querySelector("input[name=delivery]:checked") || {}).value || "correios";
 
   function updateTotals() {
     const pickup = delivery() === "retirada";
     const ship = pickup ? 0 : state.shipping;
-    const total = state.price + ship;
+    const ex = extras();
+    const total = state.price + ex * state.extraPrice + ship;
     const showShip = !pickup && state.calcShipping && state.quotedCep;
-    $("#row-ship").hidden = !showShip;
+    $("#row-extra").hidden = !ex;
+    $("#qty-note").hidden = !ex;
     $("#quote-label").textContent = "";
     $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis 🎉";
     $("#quote-total").textContent = PN.money(total);
-    $("#totals").hidden = !showShip;
+    $("#row-ship").hidden = !showShip;
+    $("#totals").hidden = !(showShip || ex);
     $("#btn-total").textContent = PN.money(total);
   }
+
+  // 1 ou 2 enfeites (o 2º pelo preço do adicional).
+  form.querySelectorAll("input[name=qty]").forEach((r) => r.addEventListener("change", () => { updateTotals(); if (state.quotedCep) requote(); }));
 
   // Entrega pelos Correios ou retirada no ponto.
   form.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => {
@@ -95,7 +106,7 @@
     const seq = ++quoteSeq;
     status.textContent = state.calcShipping ? "Calculando o frete…" : "Conferindo o CEP…";
     try {
-      const q = await PN.api("quote", { cep });
+      const q = await PN.api("quote", { cep, extras: extras() });
       if (seq !== quoteSeq) return;
       state.quotedCep = cep;
       state.cepError = "";
@@ -152,6 +163,7 @@
       whatsapp: form.whatsapp.value,
       cep: form.cep.value,
       delivery: delivery(),
+      extras: extras(),
       site_url: location.href.split(/[?#]/)[0],
     };
     if (data.name.length < 3) { form.name.focus(); return showError(errorBox, "Digite seu nome completo."); }
@@ -165,7 +177,7 @@
 
     btn.disabled = true;
     btn.textContent = "Abrindo o pagamento…";
-    PN.track("InitiateCheckout", { value: state.price / 100, currency: "BRL" });
+    PN.track("InitiateCheckout", { value: (state.price + extras() * state.extraPrice) / 100, currency: "BRL" });
     try {
       const out = await PN.api("checkout", data);
       PN.setToken(out.token);

@@ -188,7 +188,7 @@
     }
     trackPurchase(o);
     if (state.upsellReturn) {
-      if (pendingExtras().length) { state.upsellReturn = false; state.step = "extras"; state.item = 0; }
+      if (itemsOf(o).length && !(o.upsell && o.upsell.pending)) { state.upsellReturn = false; afterExtraAdded(); }
       else if (o.upsell && o.upsell.pending && !o.confirmed) state.step = "upsell";
       else state.upsellReturn = false;
     }
@@ -318,6 +318,7 @@
     $("#again-text").textContent = c.credits_left === 0
       ? "Você já criou todas as suas artes. Escolha a preferida para continuar."
       : "Quer ver outra opção?";
+    $("#none-liked").hidden = c.credits_left !== 0;
     if (autoChoose) choose(autoChoose);
     maybeWelcome();
   }
@@ -326,6 +327,9 @@
   function renderExtras() {
     const o = state.order;
     show("extras");
+    const one = itemsOf(o).length === 1;
+    $("#extras-title").textContent = one ? "Seu 2º enfeite" : "Seus outros enfeites";
+    $("#extras-sub").textContent = one ? "É de outro pet ou igual ao primeiro?" : "Para cada um: é de outro pet ou igual ao primeiro?";
     const list = $("#extras-list");
     list.replaceChildren(...itemsOf(o).map((it) => {
       const n = it.position + 1;
@@ -403,24 +407,27 @@
     window.scrollTo(0, 0);
   }
 
-  // Oferta no fim da criação: mais enfeites (outro pet ou mais um igual) no mesmo pacote.
+  // Oferta no fim da criação: o 2º enfeite (de outro pet ou igual ao primeiro), no mesmo pacote.
   function renderUpsell() {
     const o = state.order;
     const u = o.upsell || { max: 0, price_cents: 0 };
     show("upsell");
     const art = genById(o.chosen_generation);
     ["#up-art1", "#up-art2"].forEach((id) => { $(id).src = art && art.url ? art.url : "img/exemplo-4-arte.png"; });
-    state.upQty = Math.max(1, Math.min(state.upQty, u.max || 1));
     $("#up-price").textContent = PN.money(u.price_cents);
-    $("#up-stepper").hidden = u.max <= 1;
-    $("#up-qty").textContent = state.upQty;
-    $("#up-minus").disabled = state.upQty <= 1;
-    $("#up-plus").disabled = state.upQty >= u.max;
-    $("#up-yes").textContent = `Quero mais ${state.upQty} · ${PN.money(state.upQty * u.price_cents)}`;
+    document.querySelectorAll("[data-up-price]").forEach((el) => { el.textContent = PN.money(u.price_cents); });
+    document.querySelectorAll(".up-cta").forEach((el) => { el.textContent = "+ " + PN.money(u.price_cents); });
     const waiting = state.upsellReturn && u.pending;
     $("#up-offer").hidden = waiting;
     $("#up-waiting").hidden = !waiting;
     if (waiting) schedule(4000);
+  }
+  // Depois que o 2º enfeite entra no pedido: outro pet → criar a arte; igual → finalizar.
+  function afterExtraAdded() {
+    const p = pendingExtras()[0];
+    if (p && p.kind === "novo") { state.item = p.position; state.step = "studio"; state.mode = "idle"; state.photo = null; }
+    else if (p) { state.item = 0; state.step = "extras"; }
+    else { state.item = 0; state.step = "address"; }
   }
   function skipUpsell() {
     try { localStorage.setItem(upKey(), "1"); } catch (_) { /* modo privado */ }
@@ -814,36 +821,34 @@
   $("#again-same").addEventListener("click", create);
   $("#again-other").addEventListener("click", () => { state.mode = "pick"; renderStudio(); $("#pick-block").scrollIntoView({ behavior: "smooth", block: "center" }); });
   $("#go-address").addEventListener("click", () => {
-    if (state.item) { state.item = 0; state.step = "extras"; state.photo = null; render(); window.scrollTo(0, 0); return; }
+    if (state.item) { state.item = 0; state.step = pendingExtras().length ? "extras" : "address"; state.photo = null; render(); window.scrollTo(0, 0); return; }
     nextStep();
   });
   $("#back-arts").addEventListener("click", () => { state.step = itemsOf(state.order).length ? "extras" : "studio"; render(); });
   $("#back-extras").addEventListener("click", () => { state.item = 0; state.step = "extras"; state.photo = null; render(); });
   $("#extras-next").addEventListener("click", () => { state.step = "address"; render(); });
   $("#extras-back").addEventListener("click", () => { state.item = 0; state.step = "studio"; render(); });
-  $("#up-minus").addEventListener("click", () => { state.upQty--; renderUpsell(); });
-  $("#up-plus").addEventListener("click", () => { state.upQty++; renderUpsell(); });
   $("#up-no").addEventListener("click", skipUpsell);
   $("#up-skip").addEventListener("click", skipUpsell);
   $("#up-retry").addEventListener("click", () => { state.upsellReturn = false; renderUpsell(); });
-  $("#up-yes").addEventListener("click", async (e) => {
-    const b = e.currentTarget;
+  document.querySelectorAll("[data-up-kind]").forEach((btn) => btn.addEventListener("click", async () => {
     setError("#upsell-error", "");
-    b.disabled = true;
+    document.querySelectorAll("[data-up-kind]").forEach((b) => { b.disabled = true; });
+    btn.classList.add("busy");
     try {
-      const out = await PN.api("add-extras", { token: state.token, qty: state.upQty });
+      const out = await PN.api("add-extras", { token: state.token, qty: 1, kind: btn.dataset.upKind });
       if (out.redirect) { location.href = out.redirect; return; }
       state.order = out.order;      // pedido de teste: entra na hora
-      state.item = 0;
-      state.step = "extras";
+      afterExtraAdded();
       render();
       window.scrollTo(0, 0);
     } catch (err) {
       setError("#upsell-error", err.message);
     } finally {
-      b.disabled = false;
+      document.querySelectorAll("[data-up-kind]").forEach((b) => { b.disabled = false; });
+      btn.classList.remove("busy");
     }
-  });
+  }));
   $("#edit-address").addEventListener("click", () => { delete $("#address-form").dataset.filled; state.step = "address"; render(); });
 
   // endereço

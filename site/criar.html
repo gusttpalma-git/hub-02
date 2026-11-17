@@ -122,6 +122,7 @@
             <button class="btn ghost block sm" id="again-same" type="button">Tentar de novo com a mesma foto</button>
             <button class="btn ghost block sm" id="again-other" type="button">Tentar com outra foto</button>
           </div>
+          <p class="center none-liked" id="none-liked" hidden>Não gostou de nenhuma? <a data-support hidden target="_blank" rel="noopener">Fale com a gente no WhatsApp</a> antes de finalizar.</p>
           <p class="center" style="margin:18px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">💬 Preciso de ajuda com as artes (WhatsApp)</a></p>
         </div>
       </div>
@@ -136,25 +137,30 @@
           <div class="mockup sm"><img id="up-art2" alt=""></div>
           <span class="up-plus">+</span>
         </div>
-        <h2>Que tal mais um enfeite? 🎁</h2>
-        <p class="muted">Do outro pet da família ou mais um igual, para dar de presente. Vai no mesmo pacote, <b>sem frete a mais</b>.</p>
-        <p class="up-price"><strong id="up-price">R$ 12,90</strong> <span>cada</span></p>
+        <h2>Quer levar mais um? 🎁</h2>
+        <p class="up-lead">O 2º enfeite sai por só <strong id="up-price">R$ 12,90</strong><br><span class="muted">no mesmo pacote, sem frete a mais</span></p>
         <div class="alert error" id="upsell-error" hidden role="alert"></div>
         <div id="up-offer">
-          <div class="stepper up-stepper" id="up-stepper" role="group" aria-label="Quantos enfeites a mais">
-            <button type="button" id="up-minus" aria-label="Menos um">−</button>
-            <output id="up-qty" aria-live="polite">1</output>
-            <button type="button" id="up-plus" aria-label="Mais um">+</button>
+          <div class="up-options">
+            <button type="button" class="up-option" data-up-kind="novo">
+              <span class="up-ico" aria-hidden="true">🐾</span>
+              <span class="up-text"><b>De outro pet</b><small>Você envia outra foto e escolhe a arte</small></span>
+              <span class="up-cta">Quero</span>
+            </button>
+            <button type="button" class="up-option" data-up-kind="copia">
+              <span class="up-ico" aria-hidden="true">🎁</span>
+              <span class="up-text"><b>Igual a este</b><small>Para presentear, com outro nome no verso</small></span>
+              <span class="up-cta">Quero</span>
+            </button>
           </div>
-          <button class="btn green block" type="button" id="up-yes">Quero mais 1</button>
-          <button class="btn ghost block" type="button" id="up-no">Não, obrigado. Continuar →</button>
-          <p class="small muted" style="margin:12px 0 0">🔒 Pagamento seguro pelo Mercado Pago. Depois você volta direto para cá.</p>
+          <button class="btn ghost block" type="button" id="up-no">Não, obrigado. Continuar</button>
+          <p class="small muted" style="margin:12px 0 0">🔒 Você paga os <span data-up-price>R$ 12,90</span> no Mercado Pago e volta direto para cá.</p>
         </div>
         <div id="up-waiting" hidden>
           <div class="spinner dark"></div>
-          <p style="margin:14px 0 4px"><b>Aguardando o pagamento do adicional…</b></p>
+          <p style="margin:14px 0 4px"><b>Aguardando o pagamento do 2º enfeite…</b></p>
           <p class="small muted">Com Pix leva poucos segundos. Esta tela atualiza sozinha.</p>
-          <p style="margin:12px 0 0"><button class="linklike" type="button" id="up-retry">Pagar de novo</button> · <button class="linklike" type="button" id="up-skip">Continuar sem o adicional</button></p>
+          <p style="margin:12px 0 0"><button class="linklike" type="button" id="up-retry">Pagar de novo</button> · <button class="linklike" type="button" id="up-skip">Continuar sem o 2º enfeite</button></p>
         </div>
       </div>
     </section>
@@ -163,12 +169,12 @@
     <section id="view-extras" hidden>
       <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Finalizar</li></ol>
       <div class="card">
-        <h2 class="center">Seus outros enfeites</h2>
-        <p class="center muted">Para cada um, diga se é de outro pet ou mais um igual ao primeiro.</p>
+        <h2 class="center" id="extras-title">Seu 2º enfeite</h2>
+        <p class="center muted" id="extras-sub">É de outro pet ou igual ao primeiro?</p>
         <div class="alert error" id="extras-error" hidden role="alert"></div>
         <div id="extras-list" class="extras-list"></div>
         <button class="btn green block" type="button" id="extras-next" disabled>Continuar →</button>
-        <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="extras-back">← Voltar para a arte do primeiro</button></p>
+        <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="extras-back">← Voltar para a arte do 1º enfeite</button></p>
       </div>
     </section>
 
@@ -209,6 +215,7 @@
         <label class="field"><span>Observações <small>(opcional)</small></span>
           <textarea name="customer_notes" rows="3" maxlength="500" placeholder="Algo que a gente precise saber sobre a arte ou o nome? Ex.: o nome tem acento"></textarea></label>
         <button class="btn block" type="submit" id="confirm-btn">🎄 Finalizar meu pedido</button>
+        <p class="small muted center" style="margin:10px 0 0">Ao finalizar, a arte escolhida vai para a produção.</p>
         <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="back-arts">← Voltar para as artes</button></p>
       </form>
     </section>

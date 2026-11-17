@@ -588,3 +588,90 @@ dialog.onb[open]::backdrop { animation: fade-in .3s ease; }
 .paid-banner { display: flex; flex-direction: column; gap: 2px; margin: 0 0 16px; padding: 12px 16px; border-radius: 16px; background: var(--pine-soft); color: var(--pine-deep); font-weight: 800; text-align: center; }
 .paid-banner small { font-weight: 600; color: var(--muted); font-size: .9rem; }
 .done-next { margin: 4px 0 14px; color: var(--muted); }
+
+/* ══ revisão visual: topo, pedido e botões que não quebram linha ══ */
+.btn, .pill { white-space: nowrap; }
+.hero { position: relative; overflow: hidden; padding-top: 70px;
+  background:
+    radial-gradient(260px 200px at 8% 18%, rgba(217, 164, 65, .16), transparent 70%),
+    radial-gradient(320px 260px at 92% 40%, rgba(184, 50, 42, .08), transparent 70%),
+    radial-gradient(380px 300px at 20% 95%, rgba(30, 90, 60, .08), transparent 70%); }
+.garland { position: absolute; top: -14px; left: 0; right: 0; height: 88px; pointer-events: none;
+  background: url("../img/galho.svg") repeat-x 0 0 / 300px auto; opacity: .95; }
+.hero h1 em { font-style: italic; color: var(--berry); }
+.hero-copy .lead { font-size: 1.15rem; }
+.offer { align-items: center; gap: 10px 18px; margin-bottom: 16px; }
+.free-ship { margin: 0; flex-direction: column; align-items: flex-start; gap: 0; border-radius: 16px; padding: 8px 16px; line-height: 1.25; }
+.free-ship [data-frete-sub] { font-size: .86rem; opacity: .9; font-weight: 700; }
+.hero-cta { width: 100%; max-width: 420px; }
+.pay-then { margin: 12px 0 18px; font-size: .98rem; }
+.stage { width: min(400px, 100%); }
+
+/* quantos enfeites */
+.qty { border: 0; padding: 0; margin: 0 0 20px; }
+.qty legend { font-weight: 800; margin-bottom: 8px; padding: 0; }
+.qty-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.qty-opt { position: relative; display: block; cursor: pointer; }
+.qty-opt input { position: absolute; opacity: 0; }
+.qty-opt > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 100%; min-height: 96px; padding: 14px 8px 10px; border: 2px solid var(--line); border-radius: 16px; background: #fff; text-align: center; transition: border-color .15s, background .15s; }
+.qty-opt b { font-size: 1.05rem; }
+.qty-opt strong { font: 600 1.35rem/1.1 var(--font-title); color: var(--pine-deep); }
+.qty-opt small { color: var(--muted); font-weight: 700; font-size: .82rem; }
+.qty-opt input:checked + span { border-color: var(--pine); background: var(--pine-soft); box-shadow: inset 0 0 0 1px var(--pine); }
+.qty-opt input:focus-visible + span { outline: 3px solid var(--gold); outline-offset: 2px; }
+.qty-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); padding: 2px 10px; border-radius: 999px; background: var(--berry); color: #fff; font: 800 .72rem/1.6 var(--font-body); font-style: normal; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.qty-note { margin: 8px 0 0; font-size: .9rem; color: var(--muted); }
+
+/* oferta do 2º enfeite */
+.up-lead { margin: 0 0 16px; font-size: 1.12rem; }
+.up-lead strong { font: 600 1.6rem var(--font-title); color: var(--berry); }
+.up-options { display: grid; gap: 10px; margin-bottom: 12px; }
+.up-option { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; width: 100%; padding: 14px; border: 2px solid var(--line); border-radius: 18px; background: #fff; color: var(--ink); text-align: left; cursor: pointer; font: inherit; transition: border-color .15s, transform .1s; }
+.up-option:hover { border-color: var(--pine); }
+.up-option:active { transform: scale(.98); }
+.up-option:disabled { opacity: .55; cursor: wait; }
+.up-option.busy { opacity: 1; border-color: var(--pine); }
+.up-ico { font-size: 1.8rem; }
+.up-text b { display: block; font-size: 1.05rem; }
+.up-text small { display: block; color: var(--muted); font-weight: 600; font-size: .88rem; line-height: 1.3; }
+.up-cta { padding: 9px 12px; border-radius: 999px; background: var(--pine); color: #fff; font-weight: 800; font-size: .92rem; white-space: nowrap; }
+.none-liked { margin: 14px 0 0; font-size: .95rem; color: var(--muted); }
+
+/* telas bem estreitas (≤ 360 px) */
+@media (max-width: 360px) {
+  .btn { padding-inline: 18px; font-size: 1rem; }
+  .pill { padding: 8px 12px; font-size: .88rem; }
+  .brand { font-size: 1.15rem; gap: 8px; }
+  .brand img { width: 28px; height: 28px; }
+  .price strong { font-size: 2.1rem; }
+  .qty-opt strong { font-size: 1.2rem; }
+  .up-option { grid-template-columns: auto 1fr; }
+  .up-cta { grid-column: 1 / -1; justify-self: stretch; text-align: center; }
+}
+@media (min-width: 760px) {
+  .hero { padding-top: 96px; }
+  .garland { height: 120px; background-size: 420px auto; top: -18px; }
+  .hero-cta { width: auto; }
+  .stage { width: min(460px, 100%); }
+}
+.brand span { white-space: nowrap; }
+.garland { background: url("../img/galho.svg") no-repeat 50% 0 / max(100%, 560px) auto; height: 110px; top: -22px; }
+/* celular: preço e botão logo depois do título; a transformação vem em seguida */
+.hero-grid { grid-template-areas: "copy" "offer" "stage"; gap: 22px; }
+.hero-copy .lead { margin-bottom: 0; }
+@media (max-width: 360px) {
+  h1 { font-size: 2.15rem; }
+  .brand { font-size: 1.08rem; }
+  .topbar .wrap { gap: 8px; }
+}
+@media (min-width: 760px) {
+  .hero-grid { grid-template-areas: "copy stage" "offer stage"; gap: 0 56px; }
+  .garland { height: 150px; top: -30px; background-size: max(100%, 900px) auto; }
+}
+.hero { padding-top: 92px; }
+.garland { top: -24px; height: 120px; background: url("../img/galho.svg") no-repeat 50% 0 / 100% auto; }
+@media (min-width: 560px) { .garland { background: url("../img/galho.svg") repeat-x 0 0 / 560px auto; height: 140px; top: -26px; } }
+@media (min-width: 760px) { .hero { padding-top: 120px; } .garland { height: 150px; top: -26px; } }
+.free-ship { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 8px 16px 8px 12px; }
+.free-ship > span[aria-hidden] { grid-row: 1 / 3; font-size: 1.5rem; }
+.free-ship b { line-height: 1.1; }

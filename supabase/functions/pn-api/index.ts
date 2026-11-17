@@ -508,6 +508,12 @@ async function openArt(url: URL) {
   return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
 
+// Quantos enfeites a mais já na compra (0 ou até extra_max), todos pelo preço do adicional.
+function extrasOf(c: ReturnType<typeof cfg>, v: unknown) {
+  const n = c.extraPrice > 0 ? Math.max(0, Math.min(c.extraMax, parseInt(String(v ?? 0), 10) || 0)) : 0;
+  return { n, cents: n * c.extraPrice };
+}
+
 // Pacote um pouco mais pesado quando vão mais peças (≈ 20 g cada).
 function shippingFor(c: ReturnType<typeof cfg>, extras: number) {
   return { ...c.shipping, weightGrams: c.shipping.weightGrams + extras * 20 };
@@ -544,9 +550,11 @@ async function quote(b: Body) {
     throw new HttpError(400, (err as Error).message);
   }
   try {
-    const q = await shippingCharge(c, cep);
+    const ex = extrasOf(c, b.extras);
+    const q = await shippingCharge(c, cep, ex.n);
     return json({
-      shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, total_cents: c.priceCents + q.cents,
+      shipping_cents: q.cents, label: q.label, days: q.days, price_cents: c.priceCents, extras_cents: ex.cents,
+      total_cents: c.priceCents + ex.cents + q.cents,
       free_up_to_cents: c.shipping.mode === "gratis_ate" ? c.shipping.freeUpTo : null,
     });
   } catch (_) {
@@ -578,6 +586,7 @@ async function checkout(b: Body) {
 
   // O frete é sempre recalculado aqui: o valor cobrado nunca vem do navegador.
   const pickup = b.delivery === "retirada";
+  const ex = extrasOf(c, b.extras);
   if (pickup && !c.pickup.enabled) throw new HttpError(400, "A retirada não está disponível no momento.");
   let shipping: { cents: number; cost: number | null; label: string } = { cents: 0, cost: null, label: pickup ? "Retirada: " + c.pickup.name : "Frete grátis" };
   const cep = pickup ? "" : digits(b.cep);
@@ -591,12 +600,12 @@ async function checkout(b: Body) {
   }
   if (!pickup && c.shipping.mode !== "incluso") {
     try {
-      shipping = await shippingCharge(c, cep);
+      shipping = await shippingCharge(c, cep, ex.n);
     } catch (_) {
       throw new HttpError(400, "Não encontramos esse CEP. Confira os números.");
     }
   }
-  const totalCents = c.priceCents + shipping.cents;
+  const totalCents = c.priceCents + ex.cents + shipping.cents;
 
   const token = randomHex(24);
   const { data: order, error } = await db.from("pn_orders").insert({
@@ -611,12 +620,22 @@ async function checkout(b: Body) {
     shipping_cost_cents: shipping.cost,
     cep: cep || null,
     delivery_method: pickup ? "retirada" : "correios",
+    extras: ex.n,
+    extras_cents: ex.cents,
     site_url: base,
     credits_total: c.credits,
     is_test: c.testMode,
     ...(c.testMode ? { payment_status: "paid", paid_at: new Date().toISOString() } : {}),
   }).select("*").single();
   if (error || !order) throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
+  if (ex.n) {
+    const rows = Array.from({ length: ex.n }, (_, i) => ({ order_id: order.id, position: i + 1, credits_total: c.extraCredits }));
+    const { error: itemsError } = await db.from("pn_order_items").insert(rows);
+    if (itemsError) {
+      await db.from("pn_orders").delete().eq("id", order.id);
+      throw new HttpError(500, "Não foi possível criar o pedido. Tente de novo.");
+    }
+  }
 
   const studio = `${base}criar.html?t=${token}`;
   if (c.testMode) {
@@ -635,7 +654,13 @@ async function checkout(b: Body) {
           quantity: 1,
           currency_id: "BRL",
           unit_price: c.priceCents / 100,
-        }, ...(shipping.cents > 0 ? [{
+        }, ...(ex.n ? [{
+          id: "enfeite-adicional",
+          title: ex.n === 1 ? "2º enfeite" : `${ex.n} enfeites a mais`,
+          quantity: ex.n,
+          currency_id: "BRL",
+          unit_price: c.extraPrice / 100,
+        }] : []), ...(shipping.cents > 0 ? [{
           id: "frete",
           title: "Frete",
           description: shipping.label,
@@ -756,8 +781,9 @@ async function addExtras(b: Body) {
   if (room <= 0) throw new HttpError(400, "Este pedido já tem o máximo de enfeites.");
   if (!(qty >= 1 && qty <= room)) throw new HttpError(400, `Escolha de 1 a ${room} enfeite(s).`);
   const amount = qty * c.extraPrice;
+  const kind = ["novo", "copia"].includes(b.kind) ? b.kind : null;
 
-  const { data: up, error } = await db.from("pn_upsells").insert({ order_id: order.id, qty, amount_cents: amount }).select("id").single();
+  const { data: up, error } = await db.from("pn_upsells").insert({ order_id: order.id, qty, amount_cents: amount, kind }).select("id").single();
   if (error || !up) throw new HttpError(500, "Não foi possível adicionar. Tente de novo.");
 
   if (order.is_test) {
@@ -773,7 +799,7 @@ async function addExtras(b: Body) {
       body: JSON.stringify({
         items: [{
           id: "enfeite-adicional",
-          title: qty === 1 ? "Enfeite adicional" : `${qty} enfeites adicionais`,
+          title: kind === "copia" ? "2º enfeite (igual ao primeiro)" : kind === "novo" ? "2º enfeite (outro pet)" : qty === 1 ? "Enfeite adicional" : `${qty} enfeites adicionais`,
           description: `Pedido ${order.code}`,
           quantity: qty,
           currency_id: "BRL",
