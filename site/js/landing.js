@@ -28,7 +28,8 @@
     if (state.freeUpTo) document.querySelectorAll("[data-free-up]").forEach((el) => { el.textContent = PN.money(state.freeUpTo); });
     if (c.pickup) {
       $("#delivery").hidden = false;
-      $("#pickup-label").textContent = "Sem frete · " + c.pickup.name + ", " + c.pickup.address;
+      const lbl = $("#pickup-label");
+      lbl.replaceChildren(document.createTextNode("Sem frete · " + c.pickup.name), document.createElement("br"), document.createTextNode(c.pickup.address));
     }
     // Frete: "incluso" e "gratis_ate" são vendidos como frete grátis; os outros, calculados pelo CEP.
     const free = c.shipping_mode === "incluso" || c.shipping_mode === "gratis_ate";
@@ -68,7 +69,7 @@
     const total = state.price + ship;
     const showShip = !pickup && state.calcShipping && state.quotedCep;
     $("#row-ship").hidden = !showShip;
-    $("#quote-label").textContent = state.days ? "· chega em cerca de " + state.days + " dias úteis após o envio" : "";
+    $("#quote-label").textContent = "";
     $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis 🎉";
     $("#quote-total").textContent = PN.money(total);
     $("#totals").hidden = !showShip;
@@ -100,9 +101,10 @@
       state.cepError = "";
       state.shipping = q.shipping_cents || 0;
       state.days = q.days;
+      const days = q.days ? ` Chega em cerca de ${q.days} dias úteis depois de pronto.` : "";
       status.textContent = !state.calcShipping ? "✓ Entregamos no seu endereço. Frete grátis!"
-        : !state.shipping ? "🎉 Frete grátis para o seu CEP!"
-        : q.free_up_to_cents ? `Seu CEP é bem longe: a gente paga ${PN.money(q.free_up_to_cents)} do frete e você paga só a diferença.` : "";
+        : !state.shipping ? "🎉 Frete grátis para o seu CEP!" + days
+        : q.free_up_to_cents ? `Seu CEP é bem longe: a gente paga ${PN.money(q.free_up_to_cents)} do frete e você paga só a diferença.` + days : days.trim();
     } catch (err) {
       if (seq !== quoteSeq) return;
       state.cepError = err.message;
@@ -113,12 +115,26 @@
   }
   form.cep.addEventListener("input", (e) => { e.target.value = PN.maskCep(e.target.value); requote(); });
 
-  // Quem já tem pedido neste aparelho vê um atalho no lugar de "Já comprei".
+  // Quem já tem pedido neste aparelho vê um atalho no lugar de "Já comprei" e, no topo,
+  // um aviso do que falta (ex.: pagou e fechou a página antes de enviar a foto).
   const saved = PN.getToken();
   if (saved) {
     const link = $("#open-recover");
-    link.textContent = "Continuar meu pedido →";
+    link.textContent = "Meu pedido";
     link.addEventListener("click", (e) => { e.stopImmediatePropagation(); location.href = "criar.html"; }, true);
+    PN.api("order", { token: saved }).then(({ order: o }) => {
+      let text = "", go = "";
+      if (o.payment_status === "pending") { text = "Seu pedido está esperando o pagamento."; go = "Pagar agora"; }
+      else if (o.payment_status === "paid" && !o.confirmed) {
+        text = o.generations.length ? "Seu pedido ainda não foi finalizado." : "🎉 Pagamento confirmado! Falta enviar a foto do seu pet.";
+        go = o.generations.length ? "Continuar" : "Enviar a foto";
+      } else if (o.payment_status === "paid") { text = "Pedido " + o.code + " confirmado."; go = "Acompanhar"; }
+      if (!text) return;
+      $("#resume-text").textContent = text;
+      $("#resume-go").textContent = go + " →";
+      if (o.payment_status === "pending" && o.pay_url) $("#resume-go").href = o.pay_url;
+      $("#resume").hidden = false;
+    }).catch((err) => { if (err.status === 404) PN.clearToken(); });
   }
 
   if (new URLSearchParams(location.search).get("pagamento") === "falhou") {

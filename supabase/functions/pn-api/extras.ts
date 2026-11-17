@@ -78,7 +78,11 @@ function tableQuote(c: ShippingConfig, cep: string): Quote {
   return { cents, label: `Envio para ${uf}`, days: null };
 }
 
-// Cotação em tempo real no Melhor Envio (Correios e transportadoras). Fica com a mais barata.
+// Opções mais lentas que isso só são usadas se não houver nenhuma mais rápida.
+const MAX_DAYS = 10;
+
+// Cotação em tempo real no Melhor Envio (Correios e transportadoras): a mais barata que chega
+// em até MAX_DAYS dias úteis (ex.: para Manaus o Mini Envios custa menos, mas leva 22 dias).
 async function melhorEnvioQuote(c: ShippingConfig, cep: string): Promise<Quote> {
   const res = await fetch("https://melhorenvio.com.br/api/v2/me/shipment/calculate", {
     method: "POST",
@@ -96,13 +100,14 @@ async function melhorEnvioQuote(c: ShippingConfig, cep: string): Promise<Quote> 
     signal: AbortSignal.timeout(12000),
   });
   const body = await res.json().catch(() => null);
-  if (!res.ok || !Array.isArray(body)) throw new Error(`melhor envio ${res.status}`);
+  if (!res.ok || !Array.isArray(body)) throw new Error(`melhor envio ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
   // deno-lint-ignore no-explicit-any
   const options = body.filter((s: any) => !s.error && Number(s.price) > 0)
     // deno-lint-ignore no-explicit-any
     .map((s: any) => ({ cents: Math.round(Number(s.price) * 100), label: `${s.company?.name ?? ""} ${s.name ?? ""}`.trim(), days: Number(s.delivery_time) || null }));
   if (!options.length) throw new Error("melhor envio sem opções");
-  return options.reduce((a, b) => (b.cents < a.cents ? b : a));
+  const fast = options.filter((o) => o.days && o.days <= MAX_DAYS);
+  return (fast.length ? fast : options).reduce((a, b) => (b.cents < a.cents ? b : a));
 }
 
 export async function quoteShipping(c: ShippingConfig, cep: string): Promise<Quote> {

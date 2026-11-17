@@ -99,8 +99,12 @@
     applyBrand() {
       document.querySelectorAll("[data-marca]").forEach((el) => { el.textContent = C.MARCA || "Patinha de Natal"; });
       const S = PN.store;
-      document.querySelectorAll("[data-tamanho]").forEach((el) => { el.textContent = S.size || C.TAMANHO || ""; });
-      document.querySelectorAll("[data-prazo]").forEach((el) => { el.textContent = S.lead_time || C.PRAZO_PRODUCAO || ""; });
+      // Tamanho: o do painel; senão, o diâmetro do modelo 3D (o que é de fato impresso).
+      const d = PN.publicConfig && PN.publicConfig.model && PN.publicConfig.model.diameter;
+      const size = S.size || (d ? String(d / 10).replace(".", ",") + " cm" : C.TAMANHO || "7 cm");
+      document.querySelectorAll("[data-tamanho]").forEach((el) => { el.textContent = size; });
+      if (PN.publicConfig && PN.publicConfig.credits) document.querySelectorAll("[data-credits]").forEach((el) => { el.textContent = PN.publicConfig.credits; });
+      document.querySelectorAll("[data-prazo]").forEach((el) => { el.textContent = S.lead_time || C.PRAZO_PRODUCAO || "5 dias úteis"; });
       document.querySelectorAll("[data-aviso]").forEach((el) => { el.textContent = S.notice || ""; el.hidden = !S.notice; });
       document.querySelectorAll("[data-whatsapp]").forEach((el) => {
         const link = PN.whatsappLink(el.dataset.whatsapp || "");

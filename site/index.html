@@ -25,6 +25,10 @@
     </div>
   </header>
 
+  <div class="resume" id="resume" hidden>
+    <div class="wrap"><span id="resume-text"></span><a class="btn sm green" id="resume-go" href="criar.html"></a></div>
+  </div>
+
   <main>
     <!-- topo -->
     <section class="hero">
@@ -78,48 +82,20 @@
       </div>
     </section>
 
-    <!-- como funciona -->
+    <!-- como funciona (com o vídeo da criação) -->
     <section class="band" id="como-funciona">
-      <div class="wrap">
-        <div class="section-head">
-          <p class="eyebrow">Como funciona</p>
-          <h2>Três passos, tudo pelo celular</h2>
-        </div>
-        <ol class="steps">
-          <li>
-            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span>
-            <h3>Faça o pedido</h3>
-            <p>Pague com Pix ou cartão pelo Mercado Pago. Leva um minuto.</p>
-          </li>
-          <li>
-            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
-            <h3>Envie a foto</h3>
-            <p>Diga se é gato, cachorro, ave ou roedor e mande a foto. A arte fica pronta em cerca de um minuto.</p>
-          </li>
-          <li>
-            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="9" width="18" height="12" rx="1"/><path d="M12 9v12M3 13h18M12 9C10 5 6 5 6.5 7.5S12 9 12 9zm0 0c2-4 6-4 5.5-1.5S12 9 12 9z"/></svg></span>
-            <h3>Receba em casa</h3>
-            <p>Escolha a arte preferida, veja como fica em 3D e informe o endereço.</p>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- vídeo da criação -->
-    <section id="video">
       <div class="wrap video-grid">
         <div class="phone">
           <video id="demo-video" src="video/criacao.mp4" poster="video/criacao.jpg" muted loop playsinline preload="none" aria-label="Gravação da tela: a foto do gato vira arte e depois enfeite 3D"></video>
           <button class="video-play" type="button" id="video-play" aria-label="Assistir">▶</button>
         </div>
         <div class="video-copy">
-          <p class="eyebrow">Veja como é</p>
-          <h2>Da foto à arte em 1 minuto</h2>
+          <p class="eyebrow">Como funciona</p>
+          <h2>Tudo pelo celular, em poucos minutos</h2>
           <ol class="video-steps">
-            <li><b>Pague com segurança</b> pelo Mercado Pago.</li>
-            <li><b>Você volta para o site</b> e escolhe gato, cachorro, ave ou roedor.</li>
-            <li><b>Envia a foto</b> e a arte fica pronta em cerca de 1 minuto.</li>
-            <li><b>Escolhe a preferida</b> e vê o enfeite em 3D, com o nome atrás.</li>
+            <li><b>Pague com segurança</b> pelo Mercado Pago, com Pix ou cartão.</li>
+            <li><b>Envie a foto logo em seguida</b>, aqui no site. A arte fica pronta em cerca de 1 minuto.</li>
+            <li><b>Escolha a preferida</b> entre até <span data-credits>4</span> artes, veja o enfeite em 3D com o nome no verso e receba em casa.</li>
           </ol>
           <a class="btn" href="#comprar">Quero o meu</a>
         </div>
@@ -132,7 +108,7 @@
         <div class="section-head">
           <p class="eyebrow">Exemplos</p>
           <h2>Qualquer foto vira enfeite</h2>
-          <p>Deitado, sentado, no sofá: ele sai sempre de frente, com as patinhas no aro.</p>
+          <p>Qualquer pose serve, desde que o rostinho apareça bem: na arte ele sai sempre de frente, com as patinhas no aro.</p>
         </div>
         <div class="gallery">
           <figure class="sample"><img class="photo" src="img/exemplo-4-foto.jpg" alt="Foto de um gato preto e branco" loading="lazy"><img class="art" src="img/exemplo-4-arte.png" alt="Arte do gato preto e branco" loading="lazy"><figcaption>Gato frajola</figcaption></figure>
@@ -166,8 +142,8 @@
       <div class="wrap">
         <div class="section-head">
           <p class="eyebrow">Galeria</p>
-          <h2>Feitos aqui, um por um</h2>
-          <p>Toque numa foto para ver de perto.</p>
+          <h2>Veja o enfeite de perto</h2>
+          <p>Toque numa foto para ampliar.</p>
         </div>
         <div class="polaroids" id="polaroids">
           <figure class="polaroid p1"><button type="button" aria-label="Ampliar foto 1"><img src="img/galeria-1.jpg" alt="Enfeite impresso do gato Mimi" loading="lazy"></button><figcaption>Mimi</figcaption></figure>
@@ -185,7 +161,6 @@
         <div class="section-head">
           <p class="eyebrow">Pedido</p>
           <h2>Peça o enfeite do seu pet</h2>
-          <p>Primeiro o pagamento; a foto você envia logo em seguida, aqui no site.</p>
         </div>
         <div class="buy">
           <form class="card" id="checkout" novalidate>
@@ -229,7 +204,7 @@
             <h3>Para chegar antes do Natal</h3>
             <p class="small muted" style="margin:0">Último dia recomendado para pedir, por região:</p>
             <ul id="deadline-list"></ul>
-            <p class="small muted" style="margin:12px 0 0">Datas recomendadas, com base nos prazos médios dos Correios. O transporte não depende de nós, então não conseguimos garantir o dia da entrega.</p>
+            <p class="small muted" style="margin:12px 0 0">Datas recomendadas, com base nos prazos médios de entrega (não garantidas).</p>
           </aside>
         </div>
       </div>
@@ -242,18 +217,16 @@
           <p class="eyebrow">Dúvidas</p>
           <h2>Perguntas comuns</h2>
         </div>
+        <details><summary>Quando eu envio a foto?</summary><p>Logo depois do pagamento: o Mercado Pago te traz de volta para cá e você já envia a foto. Se fechar a página sem querer, toque em “Já comprei”, no alto do site, e informe o e-mail e o WhatsApp da compra.</p></details>
+        <details><summary>Que foto devo enviar?</summary><p>Uma foto com o rostinho do pet de frente, com boa luz e só ele na foto. Foto de celular funciona muito bem; o fundo não importa.</p></details>
+        <details><summary>E se eu não gostar da arte?</summary><p>Você cria até <span data-credits>4</span> artes, com a mesma foto ou com outras, e escolhe a preferida. Se nenhuma ficar boa, fale com a gente no WhatsApp que liberamos mais tentativas. Só produzimos depois da sua escolha.</p></details>
+        <details><summary>O frete é grátis mesmo?</summary><p>Sim, para quase todo o Brasil. Só quando o envio para o seu CEP custa mais de <span data-free-up>R$ 20,00</span> você paga a diferença, e o valor aparece antes de pagar, assim que você digita o CEP.</p></details>
+        <details><summary>Quanto tempo demora? Chega antes do Natal?</summary><p>Produzimos em até <span data-prazo>5 dias úteis</span> depois que você escolhe a arte; depois vem o prazo de entrega, que aparece quando você digita o CEP. As datas para chegar antes do Natal são recomendadas: o transporte não depende de nós, então não conseguimos garantir o dia exato. Se estiver em cima da hora, prefira retirar.</p></details>
         <details><summary>O pagamento é seguro?</summary><p>Sim. O pagamento é feito no Mercado Pago, com Pix ou cartão. Os dados do seu cartão vão direto para eles e nunca passam pela gente.</p></details>
-        <details><summary>Que foto devo enviar?</summary><p>Uma foto em que o rosto do pet apareça de frente e com boa luz. Foto de celular funciona muito bem; o fundo e a pose não importam.</p></details>
-        <details><summary>E se eu não gostar da arte?</summary><p>Você pode criar até <span data-credits>4</span> artes, com a mesma foto ou com fotos diferentes, e escolher a que mais gostar. Só produzimos depois da sua escolha.</p></details>
         <details><summary>Serve para gato, ave e outros bichinhos?</summary><p>Sim. Você escolhe se é gato, cachorro, ave ou roedor, e a arte é feita pensando nos detalhes de cada um, como a cor dos olhos dos gatos.</p></details>
         <details><summary>As cores ficam iguais às da tela?</summary><p>A prévia já mostra as cores dos filamentos que usamos. Como a peça é impressa em plástico, com relevo, pode haver pequenas diferenças de tom.</p></details>
-        <details><summary>Quanto tempo demora para chegar?</summary><p>Produzimos em até <span data-prazo>5 dias úteis</span> depois que você escolhe a arte. Depois, é o prazo dos Correios para a sua cidade. Você recebe o código de rastreio.</p></details>
         <details><summary>Posso pedir mais de um enfeite?</summary><p>Pode. Depois de escolher a arte, oferecemos enfeites a mais por <span data-extra-price>R$ 12,90</span> cada (até 3): de outro pet ou igual ao primeiro, com outro nome no verso. Vão no mesmo pacote, sem frete a mais.</p></details>
-        <details><summary>O frete é grátis mesmo?</summary><p>Sim: a gente paga o frete para quase todo o Brasil. Só em CEPs muito distantes, em que o envio passa de <span data-free-up>R$ 20,00</span>, você paga apenas a diferença, e o valor aparece antes de pagar, assim que você digita o CEP.</p></details>
-        <details><summary>Quando eu envio a foto?</summary><p>Logo depois do pagamento. O Mercado Pago te traz de volta para a área de criação do site, onde você escolhe o tipo de pet e envia a foto. Se fechar sem querer, toque em “Já comprei”, no alto da página.</p></details>
-        <details><summary>Posso retirar em vez de receber pelos Correios?</summary><p>Pode, sem frete: a retirada é no Studio Lina Palma, Rua 7 de Setembro, 433, Centro, Cosmópolis (SP). Avisamos pelo WhatsApp quando estiver pronto.</p></details>
-        <details><summary>As datas para chegar antes do Natal são garantidas?</summary><p>São datas recomendadas, calculadas com os prazos médios dos Correios mais o nosso tempo de produção. O transporte não depende de nós, então não conseguimos garantir o dia exato da entrega. Se for para muito perto do Natal, prefira pedir antes ou retirar.</p></details>
-        <details><summary>Já paguei. Como volto para enviar a foto?</summary><p>Toque em “Já comprei”, no alto da página, e informe o e-mail e o WhatsApp usados na compra.</p></details>
+        <details><summary>Posso retirar em vez de receber em casa?</summary><p>Pode, sem frete: a retirada é no Studio Lina Palma, Rua 7 de Setembro, 433, Centro, Cosmópolis (SP). Avisamos pelo WhatsApp quando estiver pronto.</p></details>
       </div>
     </section>
 

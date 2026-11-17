@@ -194,7 +194,9 @@
         el("dt", {}, "WhatsApp"), el("dd", {}, el("a", { href: "https://wa.me/55" + o.whatsapp, target: "_blank", rel: "noopener" }, PN.maskPhone(o.whatsapp))),
         el("dt", {}, "E-mail"), el("dd", {}, o.email),
         el("dt", {}, "Pet"), el("dd", {}, o.pet_name || "—"),
-        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "") + (o.shipping_cost_cents ? " · frete real " + PN.money(o.shipping_cost_cents) : "")),
+        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "")),
+        o.delivery_method !== "retirada" && o.shipping_label && el("dt", {}, "Envio"),
+        o.delivery_method !== "retirada" && o.shipping_label && el("dd", {}, o.shipping_label + (o.shipping_cost_cents ? " · custo " + PN.money(o.shipping_cost_cents) : "") + " (compre esta etiqueta no Melhor Envio)"),
         el("dt", {}, "Artes"), el("dd", {}, o.credits_used + " de " + o.credits_total + " usadas"),
       ),
       o.customer_notes && el("div", { class: "alert info", style: "margin:12px 0 0" }, "Observações do cliente: " + o.customer_notes),
@@ -424,7 +426,7 @@
   };
   function showShipping() {
     const mode = $("#settings").shipping_mode.value;
-    $("#ship-table").hidden = mode === "incluso" || mode === "gratis_ate";
+    $("#ship-table").hidden = mode === "incluso";
     $("#ship-me").hidden = mode !== "melhor_envio" && mode !== "gratis_ate";
     $("#ship-free").hidden = mode !== "gratis_ate";
   }

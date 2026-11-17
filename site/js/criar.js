@@ -63,7 +63,12 @@
 
   // ───────── carregar pedido ─────────
 
-  try { state.species = localStorage.getItem("pn_species_" + state.token) || null; } catch (_) { /* modo privado */ }
+  const speciesKey = (item) => "pn_species_" + state.token + (item ? "_" + item : "");
+  function loadSpecies(item) {
+    try { return localStorage.getItem(speciesKey(item)) || null; } catch (_) { return null; }
+  }
+  state.species = loadSpecies(0);
+  state.speciesFor = 0;
 
   async function load() {
     if (!state.token) return show("login");
@@ -170,7 +175,13 @@
     updateSupport();
     $("#testbar").hidden = !o.is_test;
 
-    if (o.payment_status === "pending") { show("pending"); return schedule(4000); }
+    if (o.payment_status === "pending") {
+      show("pending");
+      const pay = $("#pay-again");
+      pay.hidden = !o.pay_url;
+      if (o.pay_url) pay.href = o.pay_url;
+      return schedule(4000);
+    }
     if (o.payment_status !== "paid") {
       show("login");
       return setError("#login-error", "Este pedido foi cancelado e o valor devolvido. Fale com a gente se precisar de ajuda.");
@@ -201,6 +212,7 @@
 
   function renderStudio() {
     const o = state.order;
+    if (state.speciesFor !== state.item) { state.species = loadSpecies(state.item); state.speciesFor = state.item; }
     const arts = doneArts();
     const busy = processing();
     show("studio");
@@ -235,9 +247,14 @@
       paws.appendChild(s);
     }
     const label = document.createElement("span");
-    label.textContent = c.credits_left === 0 ? "Você usou todas as tentativas"
-      : c.credits_left === 1 ? "Resta 1 tentativa" : "Você tem " + c.credits_left + " tentativas";
+    const used = c.credits_total - c.credits_left;
+    label.textContent = c.credits_left === 0 ? "Você já criou todas as artes"
+      : c.credits_left === 1 ? "Resta 1 arte para criar"
+      : (used ? "Restam " : "Você pode criar ") + c.credits_left + " artes";
     paws.appendChild(label);
+
+    $("#paid-banner").hidden = !(state.item === 0 && !o.generations.length);
+    $("#paid-code").textContent = o.code;
 
     const piece = state.item ? `Enfeite ${state.item + 1}: ` : "";
     $("#studio-title").textContent = piece + (arts.length ? "escolha a arte preferida" : state.item ? "envie a foto do outro pet" : "Envie a foto do seu pet");
@@ -490,13 +507,17 @@
       const a = o.address || {};
       f.customer_notes.value = o.customer_notes || "";
       f.recipient.value = a.recipient || o.name || "";
-      f.cep.value = a.cep ? PN.maskCep(a.cep) : "";
+      f.cep.value = a.cep ? PN.maskCep(a.cep) : o.checkout_cep ? PN.maskCep(o.checkout_cep) : "";
       f.street.value = a.street || "";
       f.number.value = a.number || "";
       f.complement.value = a.complement || "";
       f.district.value = a.district || "";
       f.city.value = a.city || "";
       f.state.value = a.state || "";
+      if (!pickup && !a.street && o.checkout_cep && !o.locked_cep) {
+        lookupCep(o.checkout_cep, true);
+        $("#cep-status").textContent = "CEP informado na compra. Confira o endereço e preencha o número.";
+      }
     }
     // Frete cobrado por CEP: a entrega é nesse CEP.
     if (!pickup && o.locked_cep) {
@@ -521,6 +542,10 @@
     const pickup = o.delivery_method === "retirada";
 
     const st = o.production_status;
+    const prazo = (PN.store && PN.store.lead_time) || (PN.config && PN.config.PRAZO_PRODUCAO) || "5 dias úteis";
+    $("#done-next").textContent = st === "aguardando"
+      ? `Agora é com a gente: produzimos em até ${prazo} e avisamos pelo WhatsApp quando ${pickup ? "estiver pronto para retirar" : "postar, com o código de rastreio"}.`
+      : st === "producao" ? "Seu enfeite está sendo produzido. 🎄" : "";
     const steps = [
       ["Pagamento confirmado", true],
       ["Arte escolhida", true],
@@ -550,8 +575,7 @@
     if (pickup) {
       const pk = (PN.publicConfig && PN.publicConfig.pickup) || {};
       title.textContent = "Retirada";
-      box.append(title, br(), txt(pk.name || ""), br(), txt(pk.address || ""), br(), txt("Quem retira: " + (a.recipient || "")),
-        br(), txt("Avisamos pelo WhatsApp quando estiver pronto."));
+      box.append(title, br(), txt(pk.name || ""), br(), txt(pk.address || ""), br(), txt("Quem retira: " + (a.recipient || "")));
     } else {
       title.textContent = "Entrega para";
       box.append(title, br(), txt(a.recipient), br(),
@@ -630,7 +654,7 @@
     try { seen = !!localStorage.getItem(key); } catch (_) { /* modo privado */ }
     if (used < 2 || c.credits_left === 0 || seen) return;
     try { localStorage.setItem(key, "1"); } catch (_) { /* modo privado */ }
-    openTips((c.credits_left === 1 ? "Você ainda tem 1 tentativa." : "Você ainda tem " + c.credits_left + " tentativas.") + " A arte fica mais parecida com uma foto assim:");
+    openTips((c.credits_left === 1 ? "Você ainda pode criar 1 arte." : "Você ainda pode criar " + c.credits_left + " artes.") + " Ela fica mais parecida com uma foto assim:");
   }
   $("#open-tips").addEventListener("click", () => openTips());
 
@@ -776,7 +800,7 @@
   });
   document.querySelectorAll("[data-species]").forEach((b) => b.addEventListener("click", () => {
     state.species = b.dataset.species;
-    try { localStorage.setItem("pn_species_" + state.token, state.species); } catch (_) { /* modo privado */ }
+    try { localStorage.setItem(speciesKey(state.item), state.species); } catch (_) { /* modo privado */ }
     setError("#studio-error", "");
     renderStudio();
   }));

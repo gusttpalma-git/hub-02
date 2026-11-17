@@ -405,6 +405,10 @@ async function orderView(order: any) {
     amount_cents: o.amount_cents,
     shipping_cents: o.shipping_cents,
     locked_cep: o.shipping_cents > 0 ? o.cep : null,
+    checkout_cep: o.cep,
+    // pagamento ainda não feito: reabre o mesmo pagamento (sem criar outro pedido)
+    pay_url: o.payment_status === "pending" && o.mp_preference_id
+      ? `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${encodeURIComponent(o.mp_preference_id)}` : null,
     delivery_method: o.delivery_method,
     address: o.confirmed_at
       ? { recipient: o.recipient, cep: o.cep, street: o.street, number: o.number, complement: o.complement, district: o.district, city: o.city, state: o.state }
@@ -522,7 +526,9 @@ async function shippingCharge(c: ReturnType<typeof cfg>, cep: string, extras = 0
       console.error("sem cotação de frete; frete grátis", err);
     }
     const charge = Math.max(0, q.cents - s.freeUpTo);
-    return { cents: charge, cost: q.cents || null, label: charge ? (q.label || "Frete") : "Frete grátis", days: q.days };
+    // O rótulo guarda o serviço cotado: é a etiqueta que a loja compra no Melhor Envio.
+    const label = q.label ? q.label + (q.days ? ` · ${q.days} dias úteis` : "") : "Frete";
+    return { cents: charge, cost: q.cents || null, label, days: q.days };
   }
   const q = await quoteShipping(s, cep);
   return { cents: q.cents, cost: q.cents, label: q.label, days: q.days };

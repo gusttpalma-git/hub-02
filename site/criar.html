@@ -49,14 +49,17 @@
         <div class="spinner dark"></div>
         <h2 style="margin-top:18px">Aguardando o pagamento</h2>
         <p class="muted">Assim que o pagamento for confirmado, esta página libera sozinha. Com Pix leva poucos segundos.</p>
-        <a class="btn ghost block" href="index.html#comprar">Ainda não paguei</a>
+        <a class="btn green block" id="pay-again" hidden>Ainda não paguei · pagar agora</a>
+        <p class="small muted" style="margin:14px 0 0">Já pagou e nada mudou em alguns minutos? <a data-support hidden target="_blank" rel="noopener">Fale com a gente</a>.</p>
       </div>
     </section>
 
     <!-- passo 1 e 2: foto e artes -->
     <section id="view-studio" hidden>
-      <ol class="progress"><li class="on">1. Foto</li><li id="prog-2">2. Escolher</li><li>3. Endereço</li></ol>
+      <ol class="progress"><li class="on">1. Foto</li><li id="prog-2">2. Escolher</li><li>3. Finalizar</li></ol>
       <div class="card">
+        <p class="paid-banner" id="paid-banner" hidden>✓ Pagamento confirmado · pedido <span id="paid-code"></span>
+          <small>Faça com calma: se sair, é só voltar ao site e tocar em “Meu pedido” ou “Já comprei”.</small></p>
         <h2 class="center" id="studio-title">Envie a foto do seu pet</h2>
         <p class="paws" id="paws" aria-live="polite"></p>
         <p class="center" style="margin:-8px 0 14px"><button class="linklike" type="button" id="back-extras" hidden>← Voltar para os enfeites</button></p>
@@ -85,12 +88,7 @@
             <small>da galeria ou da câmera</small>
             <input type="file" id="file" accept="image/*" hidden>
           </label>
-          <ul class="tips">
-            <li><span class="icon">🐶</span>Rosto de frente</li>
-            <li><span class="icon">☀️</span>Boa luz</li>
-            <li><span class="icon">1️⃣</span>Só um pet</li>
-          </ul>
-          <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="open-tips">Ver dicas para a foto</button></p>
+          <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="open-tips">📸 Como deve ser a foto?</button></p>
           <p class="center" style="margin:4px 0 0"><button class="linklike" type="button" id="cancel-pick" hidden>← Voltar para as artes</button></p>
         </div>
 
@@ -102,7 +100,7 @@
               <div class="spinner"></div>
               <div>Desenhando seu pet…</div>
               <div class="bar"><i id="bar"></i></div>
-              <small style="font:600 1rem var(--font-body)">Leva cerca de 1 minuto. Não feche esta página.</small>
+              <small style="font:600 1rem var(--font-body)">Leva cerca de 1 minuto. Se sair, a arte continua sendo feita e aparece quando você voltar.</small>
             </div>
           </div>
           <div id="preview-actions" class="again">
@@ -131,7 +129,7 @@
 
     <!-- oferta no fim: mais enfeites no mesmo pacote -->
     <section id="view-upsell" hidden>
-      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Endereço</li></ol>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Finalizar</li></ol>
       <div class="card center upsell">
         <div class="up-pair" aria-hidden="true">
           <div class="mockup sm"><img id="up-art1" alt=""></div>
@@ -163,7 +161,7 @@
 
     <!-- enfeites adicionais: outro pet ou mais um igual -->
     <section id="view-extras" hidden>
-      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Endereço</li></ol>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li>3. Finalizar</li></ol>
       <div class="card">
         <h2 class="center">Seus outros enfeites</h2>
         <p class="center muted">Para cada um, diga se é de outro pet ou mais um igual ao primeiro.</p>
@@ -176,7 +174,7 @@
 
     <!-- passo 3: endereço -->
     <section id="view-address" hidden>
-      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li class="on">3. Endereço</li></ol>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li class="on">3. Finalizar</li></ol>
       <form class="card" id="address-form" novalidate>
         <h2 class="center">O nome no verso</h2>
         <div class="viewer name-viewer" id="name-viewer"><div class="loading"><div class="spinner dark"></div>Montando a prévia…</div></div>
@@ -221,13 +219,14 @@
         <div class="mockup sm" style="margin-bottom:18px"><img id="done-art" alt="Arte do seu enfeite"></div>
         <h2>Pedido confirmado! 🎉</h2>
         <p>Pedido <strong id="done-code"></strong><span id="done-pet"></span></p>
+        <p class="done-next" id="done-next"></p>
         <ul class="timeline" id="timeline"></ul>
         <div class="summary" id="done-address"></div>
         <p style="margin:18px 0 0"><button class="linklike" type="button" id="edit-address" hidden>Corrigir o endereço</button></p>
         <div class="summary" id="done-notes" hidden style="margin-top:12px"></div>
         <a class="btn green block" style="margin-top:14px" id="wa-summary" hidden target="_blank" rel="noopener">💬 Enviar o resumo no WhatsApp</a>
         <p class="center" style="margin:10px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">Preciso de ajuda com o pedido</a></p>
-        <p class="small muted" style="margin:18px 0 0">Guarde esta página: é por aqui que você acompanha o envio.</p>
+        <p class="small muted" style="margin:18px 0 0">Para acompanhar depois, volte ao site e toque em “Meu pedido” (ou “Já comprei”, em outro aparelho).</p>
       </div>
     </section>
 
