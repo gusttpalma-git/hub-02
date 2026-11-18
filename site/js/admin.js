@@ -230,7 +230,7 @@
 
     return el("article", { class: "order" },
       el("header", {},
-        el("strong", {}, o.code),
+        el("strong", {}, o.order_no ? "#" + String(o.order_no).padStart(3, "0") + " · " + o.code : o.code),
         el("span", { class: "badge " + b }, BUCKETS[b] || b),
         o.delivery_method === "retirada" && el("span", { class: "badge retirada" }, "🏠 Retirada"),
         (o.extras || 0) > 0 && el("span", { class: "badge extras" }, `${(o.extras || 0) + 1} enfeites`),
@@ -360,6 +360,8 @@
     f.pickup_enabled.checked = pick.enabled !== false;
     f.pickup_name.value = pick.name || "";
     f.pickup_address.value = pick.address || "";
+    f.ntfy_topic.value = s.ntfy_topic || "";
+    $("#ntfy-link").textContent = s.ntfy_topic ? "ntfy.sh/" + s.ntfy_topic : "(salve um tópico primeiro)";
     f.extra_price.value = brl(s.extra_price_cents);
     f.extra_max.value = s.extra_max ?? 3;
     f.free_up_to.value = brl(s.free_shipping_up_to_cents);
@@ -456,6 +458,7 @@
         store: Object.fromEntries(STORE_FIELDS.map((k) => [k, f["st_" + k].value])),
         filaments: f.filaments.value,
         pickup: { enabled: f.pickup_enabled.checked, name: f.pickup_name.value, address: f.pickup_address.value },
+        ntfy_topic: f.ntfy_topic.value,
         extra_price_cents: toCents(f.extra_price.value),
         extra_max: f.extra_max.value,
         free_shipping_up_to_cents: toCents(f.free_up_to.value),
@@ -486,5 +489,18 @@
       msg.className = "alert error";
     }
     msg.hidden = false;
+  });
+
+  // Notificações no celular (app ntfy): sugere um tópico secreto e manda um teste.
+  $("#ntfy-new").addEventListener("click", () => {
+    const r = crypto.getRandomValues(new Uint8Array(6));
+    $("#settings").ntfy_topic.value = "patinha-" + Array.from(r, (b) => b.toString(16).padStart(2, "0")).join("");
+  });
+  $("#ntfy-test").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    try { await call("admin-test-notify", {}); b.textContent = "✓ Enviado! Veja o celular"; }
+    catch (err) { alert(err.message); }
+    finally { setTimeout(() => { b.disabled = false; b.textContent = "Enviar notificação de teste"; }, 3000); }
   });
 })();

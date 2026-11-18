@@ -121,8 +121,8 @@
           <button class="btn green block" id="go-address" type="button" disabled>Escolha uma arte acima</button>
           <div class="again" id="again-block">
             <p class="center muted" style="margin:20px 0 0" id="again-text"></p>
-            <button class="btn ghost block sm" id="again-same" type="button">Tentar de novo com a mesma foto</button>
-            <button class="btn ghost block sm" id="again-other" type="button">Tentar com outra foto</button>
+            <button class="btn block sm again-same" id="again-same" type="button">🔁 Nova arte, mesma foto</button>
+            <button class="btn block sm again-other" id="again-other" type="button">📷 Usar outra foto</button>
           </div>
           <p class="center none-liked" id="none-liked" hidden>Não gostou de nenhuma? <a data-support hidden target="_blank" rel="noopener">Fale com a gente no WhatsApp</a> antes de finalizar.</p>
           <p class="center" style="margin:18px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">💬 Preciso de ajuda com as artes (WhatsApp)</a></p>
@@ -237,10 +237,26 @@
         <a class="btn green block" style="margin-top:14px" id="wa-summary" hidden target="_blank" rel="noopener">💬 Enviar o resumo no WhatsApp</a>
         <p class="center" style="margin:10px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">Preciso de ajuda com o pedido</a></p>
         <p class="small muted" style="margin:18px 0 0">Para acompanhar depois, volte ao site e toque em “Meu pedido” (ou “Já comprei”, em outro aparelho).</p>
+        <div class="another">
+          <p>🎁 Quer fazer um enfeite para outra pessoa?</p>
+          <a class="btn ghost block sm" id="new-order" href="index.html#comprar">Fazer outro pedido</a>
+        </div>
       </div>
     </section>
 
   </main>
+
+  <!-- confirmação (antes de sair, de seguir, da última arte, de finalizar) -->
+  <dialog id="ask" class="ask" aria-labelledby="ask-title">
+    <div class="inner center">
+      <div class="ask-ico" id="ask-ico" aria-hidden="true"></div>
+      <img class="ask-img" id="ask-img" alt="" hidden>
+      <h3 id="ask-title"></h3>
+      <p class="muted" id="ask-text"></p>
+      <button class="btn green block" type="button" id="ask-ok"></button>
+      <button class="btn ghost block" type="button" id="ask-cancel" style="margin-top:10px"></button>
+    </div>
+  </dialog>
 
   <dialog id="wa-dialog" aria-label="Enviar resumo pelo WhatsApp">
     <div class="inner center">

@@ -190,6 +190,7 @@ function cfg(s: Settings) {
       brand: s.brand_name || "Patinha de Natal",
     },
     ownerEmail: s.owner_email || "",
+    ntfyTopic: (s.ntfy_topic || "").trim(),
     pickup: {
       enabled: s.pickup_enabled !== "false",
       name: s.pickup_name || "Studio Lina Palma",
@@ -250,9 +251,38 @@ async function applyPayment(payment: any) {
     const { data: paid } = await db.from("pn_orders")
       .update({ payment_status: "paid", paid_at: new Date().toISOString(), mp_payment_id: String(payment.id) })
       .eq("id", orderId).eq("payment_status", "pending").select("*");
-    if (paid?.length) await notify("paid", paid[0], cfg(await loadSettings()));
+    if (paid?.length) {
+      const c = cfg(await loadSettings());
+      await notify("paid", paid[0], c);
+      await pushOwner(c, `💰 Novo pedido pago ${orderNo(paid[0])}`, `${paid[0].name} · ${(paid[0].amount_cents / 100).toFixed(2).replace(".", ",")} — aguardando a foto (${paid[0].code})`, paid[0].site_url ? paid[0].site_url + "admin.html" : undefined);
+    }
   } else if (["refunded", "charged_back"].includes(payment.status) && order.payment_status === "paid") {
     await db.from("pn_orders").update({ payment_status: "refunded" }).eq("id", orderId);
+  }
+}
+
+// ───────────────────────── aviso no celular (app ntfy) ─────────────────────────
+
+// deno-lint-ignore no-explicit-any
+const orderNo = (o: any) => (o?.order_no ? "#" + String(o.order_no).padStart(3, "0") : o?.is_test ? "teste" : o?.code || "");
+
+// Notificação no celular do dono: app gratuito "ntfy", inscrito no tópico secreto do painel.
+async function pushOwner(c: ReturnType<typeof cfg>, title: string, message: string, click?: string) {
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(c.ntfyTopic)) return;
+  try {
+    await fetch(`https://ntfy.sh/${c.ntfyTopic}`, {
+      method: "POST",
+      headers: {
+        // cabeçalhos HTTP só aceitam ASCII: o título vai codificado (RFC 2047)
+        Title: `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode(title)))}?=`,
+        Tags: "christmas_tree",
+        ...(click ? { Click: click } : {}),
+      },
+      body: message,
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (err) {
+    console.error("aviso no celular falhou", err);
   }
 }
 
@@ -279,7 +309,8 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
       pickup ? "Avisamos por e-mail e WhatsApp quando estiver pronto para retirar." : "Assim que o pacote for postado, você recebe o código de rastreio por e-mail.",
     ], button));
     if (c.ownerEmail) {
-      await sendMail(c.mail, c.ownerEmail, `Novo pedido para produzir — ${order.code}`, mailLayout(c.mail.brand, `Pedido ${esc(order.code)} pronto para produzir`, [
+      await sendMail(c.mail, c.ownerEmail, `Pedido ${orderNo(order)} pronto para produzir (${order.code})`, mailLayout(c.mail.brand, `Pedido ${esc(orderNo(order))} pronto para produzir`, [
+        `<strong>Código:</strong> ${esc(order.code)}`,
         `<strong>Cliente:</strong> ${esc(order.name)} · ${esc(order.whatsapp)}`,
         `<strong>Pet:</strong> ${esc(order.pet_name || "—")}${order.extras ? ` · + ${order.extras} enfeite(s) adicional(is)` : ""}`,
         ...(order.customer_notes ? [`<strong>Observações do cliente:</strong> ${esc(order.customer_notes)}`] : []),
@@ -313,7 +344,13 @@ async function applyUpsellPayment(payment: any, upsellId: string) {
     return;
   }
   const c = cfg(await loadSettings());
-  await db.rpc("pn_apply_upsell", { p_upsell: upsellId, p_payment: String(payment.id), p_credits: c.extraCredits });
+  const { data: ok } = await db.rpc("pn_apply_upsell", { p_upsell: upsellId, p_payment: String(payment.id), p_credits: c.extraCredits });
+  if (ok) {
+    const { data: o } = await db.from("pn_upsells").select("pn_orders(code, order_no, is_test, name, site_url)").eq("id", upsellId).maybeSingle();
+    // deno-lint-ignore no-explicit-any
+    const ord: any = (o as any)?.pn_orders;
+    if (ord) await pushOwner(c, `🎁 2º enfeite no pedido ${orderNo(ord)}`, `${ord.name} adicionou mais um enfeite (${ord.code})`, ord.site_url ? ord.site_url + "admin.html" : undefined);
+  }
 }
 
 async function syncUpsells(token: string, orderId: string) {
@@ -884,7 +921,11 @@ async function confirm(b: Body) {
     await db.from("pn_order_items").update({ pet_name: clean(names[it.position], 20) || null }).eq("order_id", order.id).eq("position", it.position);
   }
   const saved = await getOrderByToken(b.token);
-  if (!order.confirmed_at) await notify("confirmed", saved, cfg(await loadSettings()));
+  if (!order.confirmed_at) {
+    const c = cfg(await loadSettings());
+    await notify("confirmed", saved, c);
+    await pushOwner(c, `🎄 Pedido ${orderNo(saved)} pronto para produzir`, `${saved.name}${saved.pet_name ? " · " + saved.pet_name : ""}${saved.extras ? ` · ${saved.extras + 1} enfeites` : ""} · ${saved.delivery_method === "retirada" ? "retirada" : saved.city + "/" + saved.state}`, saved.site_url ? saved.site_url + "admin.html" : undefined);
+  }
   return json({ order: await orderView(saved) });
 }
 
@@ -945,6 +986,7 @@ function settingsView(s: Settings) {
     extra_max: c.extraMax,
     extra_credits: c.extraCredits,
     free_shipping_up_to_cents: c.shipping.freeUpTo,
+    ntfy_topic: c.ntfyTopic,
     filaments_text: c.filaments.map((f) => `${f.name} ${f.hex}`).join("\n"),
     filaments: c.filaments,
     model: c.model,
@@ -971,7 +1013,7 @@ async function adminOrders(b: Body) {
 
   return json({
     orders: (orders ?? []).map((o) => ({
-      id: o.id, code: o.code, created_at: o.created_at, paid_at: o.paid_at, confirmed_at: o.confirmed_at,
+      id: o.id, code: o.code, order_no: o.order_no ?? null, created_at: o.created_at, paid_at: o.paid_at, confirmed_at: o.confirmed_at,
       name: o.name, email: o.email, whatsapp: o.whatsapp, amount_cents: o.amount_cents,
       shipping_cents: o.shipping_cents, shipping_label: o.shipping_label, shipping_cost_cents: o.shipping_cost_cents, delivery_method: o.delivery_method,
       payment_status: o.payment_status, is_test: o.is_test, mp_payment_id: o.mp_payment_id,
@@ -1084,6 +1126,11 @@ async function adminSaveSettings(b: Body) {
     if (!(v >= 0 && v <= 100000)) throw new HttpError(400, "Valor de frete grátis inválido.");
     await saveSetting("free_shipping_up_to_cents", String(v));
   }
+  if (typeof b.ntfy_topic === "string") {
+    const v = b.ntfy_topic.trim();
+    if (v && !/^[A-Za-z0-9_-]{6,64}$/.test(v)) throw new HttpError(400, "Tópico de notificação inválido (use letras, números, - ou _).");
+    await saveSetting("ntfy_topic", v);
+  }
   if (b.extra_credits !== undefined) {
     const v = parseInt(b.extra_credits, 10);
     if (!(v >= 1 && v <= 10)) throw new HttpError(400, "Tentativas por pet adicional: de 1 a 10.");
@@ -1153,6 +1200,12 @@ Deno.serve(async (req) => {
       case "admin-orders": await requireAdmin(req); return await adminOrders(body);
       case "admin-update-order": await requireAdmin(req); return await adminUpdateOrder(body);
       case "admin-save-settings": await requireAdmin(req); return await adminSaveSettings(body);
+      case "admin-test-notify": {
+        const c = cfg(await requireAdmin(req));
+        if (!c.ntfyTopic) throw new HttpError(400, "Salve o tópico antes de testar.");
+        await pushOwner(c, "🔔 Teste da Patinha de Natal", "As notificações de pedidos estão funcionando!");
+        return json({ ok: true });
+      }
       default: throw new HttpError(400, "Ação desconhecida.");
     }
   } catch (err) {

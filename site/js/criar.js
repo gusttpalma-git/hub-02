@@ -29,6 +29,27 @@
     views.forEach((v) => { $("#view-" + v).hidden = v !== view; });
   }
 
+  // Janela de confirmação: devolve true (ok) ou false (cancelar / fechar).
+  function ask({ ico = "", img = "", title, text = "", ok, cancel }) {
+    const d = $("#ask");
+    $("#ask-ico").textContent = ico;
+    $("#ask-ico").hidden = !ico || !!img;
+    $("#ask-img").hidden = !img;
+    if (img) $("#ask-img").src = img;
+    $("#ask-title").textContent = title;
+    $("#ask-text").textContent = text;
+    $("#ask-text").hidden = !text;
+    $("#ask-ok").textContent = ok;
+    $("#ask-cancel").textContent = cancel;
+    return new Promise((resolve) => {
+      const done = (v) => { d.close(); resolve(v); };
+      $("#ask-ok").onclick = () => done(true);
+      $("#ask-cancel").onclick = () => done(false);
+      d.oncancel = (e) => { e.preventDefault(); done(false); };
+      d.showModal();
+    });
+  }
+
   function setError(id, msg) {
     const box = $(id);
     box.textContent = msg || "";
@@ -290,7 +311,7 @@
       const b = document.createElement("button");
       b.type = "button";
       b.className = "btn sm " + (isChosen ? "green" : "ghost");
-      b.textContent = isChosen ? "✓ Escolhida" : "Escolher esta";
+      b.textContent = isChosen ? "✓ Escolhida" : "Escolher";
       b.addEventListener("click", () => choose(g.id));
       img.addEventListener("click", () => choose(g.id));
       card.append(img, b);
@@ -777,6 +798,11 @@
   async function create() {
     if (!state.photo || state.mode === "working") return;
     if (!state.species) { setError("#studio-error", "Toque no tipo do seu pet: gato, cachorro, ave ou roedor."); return; }
+    if (cur().credits_left === 1) {
+      const go = await ask({ ico: "✨", img: state.photoUrl, title: "Esta é a sua última arte",
+        text: "Depois dela não dá para criar outra. Confira se esta é a foto certa.", ok: "Criar a última arte", cancel: "Trocar a foto" });
+      if (!go) { state.mode = "pick"; renderStudio(); return; }
+    }
     setError("#studio-error", "");
     state.mode = "working";
     state.uploading = true;
@@ -848,7 +874,11 @@
   $("#cancel-pick").addEventListener("click", () => { state.mode = "idle"; renderStudio(); });
   $("#again-same").addEventListener("click", create);
   $("#again-other").addEventListener("click", () => { state.mode = "pick"; renderStudio(); $("#pick-block").scrollIntoView({ behavior: "smooth", block: "center" }); });
-  $("#go-address").addEventListener("click", () => {
+  $("#go-address").addEventListener("click", async () => {
+    const art = chosenArt();
+    const go = await ask({ img: art && art.url, title: "Seguir com esta arte?",
+      text: "Você ainda pode voltar e trocar até finalizar o pedido.", ok: "Sim, seguir →", cancel: "Ver as artes de novo" });
+    if (!go) return;
     if (state.item) { state.item = 0; state.step = pendingExtras().length ? "extras" : "address"; state.photo = null; render(); window.scrollTo(0, 0); return; }
     nextStep();
   });
@@ -916,6 +946,9 @@
   af.addEventListener("submit", async (e) => {
     e.preventDefault();
     setError("#address-error", "");
+    const sure = await ask({ ico: "🎄", title: "Finalizar o pedido?",
+      text: "A arte escolhida vai para a produção e não dá mais para trocar.", ok: "Sim, finalizar", cancel: "Revisar" });
+    if (!sure) return;
     const btn = $("#confirm-btn");
     const label = btn.textContent;
     btn.disabled = true;
@@ -964,8 +997,42 @@
     }
   });
 
+  // Botão "voltar" do celular/navegador: volta um passo dentro da criação em vez de sair.
+  function stepBack() {
+    if ($("#ask").open) { $("#ask-cancel").click(); return true; }
+    if ($("#onb").open) { $("#onb").close(); return true; }
+    const o = state.order;
+    if (!o || !o.payment_status || o.payment_status !== "paid" || (o.confirmed && state.step !== "address")) return false;
+    if (state.step === "address") { state.step = itemsOf(o).length ? "extras" : "studio"; state.item = 0; render(); return true; }
+    if (state.step === "upsell") { state.upsellReturn = false; state.step = "studio"; render(); return true; }
+    if (state.step === "extras") { state.step = "studio"; state.item = 0; render(); return true; }
+    if (state.mode === "working") return false;
+    if (state.mode === "preview") { state.mode = "pick"; state.photo = null; renderStudio(); return true; }
+    if (state.mode === "pick" && doneArts().length) { state.mode = "idle"; renderStudio(); return true; }
+    if (state.item) { state.item = 0; state.step = pendingExtras().length ? "extras" : "studio"; state.photo = null; render(); return true; }
+    return false;
+  }
+  let leaving = false;
+  history.replaceState({ pn: "base" }, "", location.pathname);
+  history.pushState({ pn: "guard" }, "", location.pathname);
+  window.addEventListener("popstate", async () => {
+    if (leaving) return;
+    if (stepBack()) { history.pushState({ pn: "guard" }, "", location.pathname); window.scrollTo(0, 0); return; }
+    const o = state.order;
+    const unfinished = o && o.payment_status === "paid" && !o.confirmed;
+    if (!unfinished) { leaving = true; history.back(); return; }
+    history.pushState({ pn: "guard" }, "", location.pathname);
+    const out = await ask({ ico: "👋", title: "Sair da criação?",
+      text: "Seu pedido fica salvo. Para continuar depois, volte ao site e toque em “Meu pedido”.", ok: "Ficar aqui", cancel: "Sair" });
+    if (!out) { leaving = true; history.go(-2); }
+  });
+  // Fechar a aba no meio da criação: o navegador pergunta antes.
+  window.addEventListener("beforeunload", (e) => {
+    if (state.uploading || state.mode === "preview") { e.preventDefault(); e.returnValue = ""; }
+  });
+
   // Tira o token da barra de endereço (ele já está salvo no aparelho).
-  if (new URLSearchParams(location.search).has("t")) history.replaceState(null, "", location.pathname);
+  if (new URLSearchParams(location.search).has("t")) history.replaceState(history.state, "", location.pathname);
 
   load();
 })();

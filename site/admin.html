@@ -6,6 +6,10 @@
   <title>Painel — Patinha de Natal</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="admin.webmanifest">
+  <link rel="apple-touch-icon" href="img/app-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pedidos">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
@@ -124,6 +128,21 @@
             <label class="field"><span>Máximo por pedido</span><input name="extra_max" type="number" min="0" max="3"></label>
             <label class="field"><span>Tentativas por pet</span><input name="extra_credits" type="number" min="1" max="10"></label>
           </div>
+        </div>
+        <div class="card">
+          <h3>🔔 Avisos de pedido no celular</h3>
+          <ol class="small" style="padding-left:1.2em;margin:0 0 12px">
+            <li>Instale o app gratuito <b>ntfy</b> (Play Store ou App Store).</li>
+            <li>Toque em “Gerar tópico” abaixo e depois em <b>Salvar</b> no fim da página.</li>
+            <li>No app ntfy, toque em <b>+</b> e digite o tópico: <b id="ntfy-link"></b></li>
+            <li>Toque em “Enviar notificação de teste”.</li>
+          </ol>
+          <label class="field"><span>Tópico secreto</span><input name="ntfy_topic" maxlength="64" autocomplete="off" placeholder="patinha-xxxxxxxxxxxx"></label>
+          <div class="row2">
+            <button class="btn ghost sm" type="button" id="ntfy-new">Gerar tópico</button>
+            <button class="btn ghost sm" type="button" id="ntfy-test">Enviar notificação de teste</button>
+          </div>
+          <p class="small muted" style="margin:10px 0 0">Você recebe um aviso a cada pedido pago e a cada pedido pronto para produzir. Dica: no celular, abra este painel e use “Adicionar à tela inicial” para ter um ícone de app.</p>
         </div>
         <div class="card">
           <h3>Retirada</h3>

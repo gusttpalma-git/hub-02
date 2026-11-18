@@ -154,6 +154,14 @@
 
   form.whatsapp.addEventListener("input", (e) => { e.target.value = PN.maskPhone(e.target.value); });
 
+  // Voltar do Mercado Pago pelo botão "voltar" reabre esta página da memória do navegador:
+  // destrava o botão que tinha ficado em "Abrindo o pagamento…".
+  window.addEventListener("pageshow", () => {
+    btn.disabled = false;
+    btn.innerHTML = btnLabel;
+    updateTotals();
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     showError(errorBox, "");
@@ -177,12 +185,15 @@
 
     btn.disabled = true;
     btn.textContent = "Abrindo o pagamento…";
+    // se o Mercado Pago demorar demais para abrir, libera o botão de novo
+    const unlock = setTimeout(() => { btn.disabled = false; btn.innerHTML = btnLabel; }, 25000);
     PN.track("InitiateCheckout", { value: (state.price + extras() * state.extraPrice) / 100, currency: "BRL" });
     try {
       const out = await PN.api("checkout", data);
       PN.setToken(out.token);
       location.href = out.redirect;
     } catch (err) {
+      clearTimeout(unlock);
       showError(errorBox, err.message);
       btn.disabled = false;
       btn.innerHTML = btnLabel;

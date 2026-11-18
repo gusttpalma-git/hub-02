@@ -690,3 +690,24 @@ dialog.onb[open]::backdrop { animation: fade-in .3s ease; }
 @media (min-width: 760px) { .perks-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; } .perks-grid li { padding: 18px; } }
 .name-field { margin: 14px 0 6px; }
 .name-field input { font-size: 1.15rem; }
+/* botões nunca passam da borda: se o texto não couber, quebra (os textos foram encurtados para caber) */
+.btn { max-width: 100%; }
+.btn.block { white-space: normal; text-wrap: balance; }
+/* "nova arte" e "outra foto" bem diferentes */
+.again-same { background: var(--gold); color: #3b2a05; box-shadow: 0 4px 0 #a97c25, 0 10px 20px rgba(217, 164, 65, .25); }
+.again-same:active { box-shadow: 0 1px 0 #a97c25; }
+.again-other { background: #fff; color: var(--pine-deep); box-shadow: inset 0 0 0 2px var(--pine), 0 3px 0 rgba(18, 55, 38, .15); }
+#again-block .btn + .btn { margin-top: 10px; }
+/* confirmação */
+dialog.ask { width: min(380px, calc(100% - 28px)); }
+.ask-ico { font-size: 2.6rem; line-height: 1; margin-bottom: 8px; }
+.ask-img { width: 132px; height: 132px; object-fit: cover; border-radius: 18px; margin: 0 auto 12px; display: block; box-shadow: 0 6px 16px rgba(0, 0, 0, .12); }
+dialog.ask h3 { margin-bottom: 6px; }
+dialog.ask p { margin: 0 0 18px; }
+/* fazer outro pedido */
+.another { margin-top: 26px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.another p { margin: 0 0 10px; font-weight: 700; }
+.arts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.art-card { min-width: 0; }
+.art-card button { padding-inline: 8px; font-size: .95rem; white-space: normal; }
+@media (min-width: 760px) { .arts { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
