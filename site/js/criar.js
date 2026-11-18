@@ -453,7 +453,15 @@
     ["#up-art1", "#up-art2"].forEach((id) => { $(id).src = art && art.url ? art.url : "img/exemplo-4-arte.png"; });
     $("#up-price").textContent = PN.money(u.price_cents);
     document.querySelectorAll("[data-up-price]").forEach((el) => { el.textContent = PN.money(u.price_cents); });
-    document.querySelectorAll(".up-cta").forEach((el) => { el.textContent = "+ " + PN.money(u.price_cents); });
+    state.upQty = Math.max(1, Math.min(state.upQty || 1, u.max || 1));
+    $("#up-qty-box").hidden = !state.upKind || (u.max || 0) <= 1;
+    $("#up-qty").textContent = state.upQty;
+    $("#up-minus").disabled = state.upQty <= 1;
+    $("#up-plus").disabled = state.upQty >= (u.max || 1);
+    document.querySelectorAll("[data-up-kind]").forEach((b) => b.classList.toggle("on", b.dataset.upKind === state.upKind));
+    const go = $("#up-go");
+    go.disabled = !state.upKind;
+    go.textContent = state.upKind ? `Continuar para o pagamento · ${PN.money(state.upQty * u.price_cents)}` : "Escolha uma opção acima";
     const waiting = state.upsellReturn && u.pending;
     $("#up-offer").hidden = waiting;
     $("#up-waiting").hidden = !waiting;
@@ -489,21 +497,22 @@
       input.dataset.item = i;
       input.placeholder = "Ex.: Mel";
       input.value = nameOf(i);
-      input.addEventListener("input", () => setName(i, input.value));
+      input.addEventListener("input", () => { setName(i, input.value); previewName(i, input.value); });
+      input.addEventListener("focus", () => previewName(i, input.value));
       label.append(span, input);
       return label;
     }));
   }
 
   let nameTimer = null, nameSeq = 0;
-  function previewName(i, name) {
+  function previewName(i, name, back = true) {
     clearTimeout(nameTimer);
     nameTimer = setTimeout(async () => {
       const art = genById(chosenIdOf(i));
       if (!art || !window.PN3D) return;
       const seq = ++nameSeq;
       const box = $("#name-viewer");
-      $("#name-caption").textContent = name.trim()
+      $("#name-caption").textContent = !back ? `${pieces().length > 1 ? "Enfeite " + (i + 1) + " · " : ""}Arraste para girar e ver o nome no verso.` : name.trim()
         ? `Verso do enfeite${pieces().length > 1 ? " " + (i + 1) : ""}: "${name.trim()}" gravado. Arraste para ver a frente.`
         : "Verso do enfeite: digite o nome para ver como fica gravado.";
       try {
@@ -514,7 +523,7 @@
         });
         if (seq !== nameSeq) return;
         if (state.nameViewer) state.nameViewer.destroy();
-        state.nameViewer = await PN3D.view(box, model, { spin: true, hold: true, pose: { x: 0.05, y: Math.PI } });
+        state.nameViewer = await PN3D.view(box, model, back ? { spin: true, hold: true, pose: { x: 0.05, y: Math.PI } } : { spin: true });
       } catch (err) {
         console.warn("prévia do nome indisponível", err);
         box.hidden = true;
@@ -542,6 +551,7 @@
       $("#pickup-map").href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(pk.name + ", " + pk.address);
     }
     renderNames();
+    previewName(0, nameOf(0), false);
     const ax = $("#addr-extra");
     const u = o.upsell || {};
     ax.hidden = !(u.max > 0 && u.price_cents > 0) && !itemsOf(o).length;
@@ -895,24 +905,34 @@
   });
   $("#up-skip").addEventListener("click", skipUpsell);
   $("#up-retry").addEventListener("click", () => { state.upsellReturn = false; renderUpsell(); });
-  document.querySelectorAll("[data-up-kind]").forEach((btn) => btn.addEventListener("click", async () => {
+  // Tocar numa opção só marca; o pagamento abre no botão "Continuar".
+  document.querySelectorAll("[data-up-kind]").forEach((btn) => btn.addEventListener("click", () => {
+    state.upKind = btn.dataset.upKind;
     setError("#upsell-error", "");
-    document.querySelectorAll("[data-up-kind]").forEach((b) => { b.disabled = true; });
-    btn.classList.add("busy");
+    renderUpsell();
+  }));
+  $("#up-minus").addEventListener("click", () => { state.upQty--; renderUpsell(); });
+  $("#up-plus").addEventListener("click", () => { state.upQty++; renderUpsell(); });
+  $("#up-go").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    if (!state.upKind) return;
+    setError("#upsell-error", "");
+    b.disabled = true;
+    b.textContent = "Abrindo o pagamento…";
     try {
-      const out = await PN.api("add-extras", { token: state.token, qty: 1, kind: btn.dataset.upKind });
+      const out = await PN.api("add-extras", { token: state.token, qty: state.upQty, kind: state.upKind });
       if (out.redirect) { location.href = out.redirect; return; }
       state.order = out.order;      // pedido de teste: entra na hora
+      state.upKind = null;
       afterExtraAdded();
       render();
       window.scrollTo(0, 0);
     } catch (err) {
       setError("#upsell-error", err.message);
-    } finally {
-      document.querySelectorAll("[data-up-kind]").forEach((b) => { b.disabled = false; });
-      btn.classList.remove("busy");
+      renderUpsell();
     }
-  }));
+  });
+  window.addEventListener("pageshow", () => { if (state.order && state.step === "upsell") renderUpsell(); });
   $("#edit-address").addEventListener("click", () => { delete $("#address-form").dataset.filled; state.step = "address"; render(); });
 
   // endereço

@@ -503,4 +503,19 @@
     catch (err) { alert(err.message); }
     finally { setTimeout(() => { b.disabled = false; b.textContent = "Enviar notificação de teste"; }, 3000); }
   });
+
+  // Configurações em abas: mostra só os quadros do assunto escolhido.
+  function showSub(g) {
+    document.querySelectorAll("#subtabs [data-sub]").forEach((b) => b.classList.toggle("on", b.dataset.sub === g));
+    document.querySelectorAll("#settings .card[data-group]").forEach((c) => { c.hidden = c.dataset.group !== g; });
+    try { localStorage.setItem("pn_admin_sub", g); } catch (_) { /* modo privado */ }
+  }
+  document.querySelectorAll("#subtabs [data-sub]").forEach((b) => b.addEventListener("click", () => showSub(b.dataset.sub)));
+  let firstSub = "vendas";
+  try { firstSub = localStorage.getItem("pn_admin_sub") || "vendas"; } catch (_) { /* modo privado */ }
+  showSub(firstSub);
+  const syncWarn = () => { $("#test-warn").hidden = !$("#settings").test_mode.checked; };
+  $("#settings").test_mode.addEventListener("change", syncWarn);
+  new MutationObserver(syncWarn).observe($("#settings"), { subtree: true, attributes: true, attributeFilter: ["value"] });
+  setInterval(syncWarn, 1500);
 })();

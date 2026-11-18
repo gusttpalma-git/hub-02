@@ -711,3 +711,12 @@ dialog.ask p { margin: 0 0 18px; }
 .art-card { min-width: 0; }
 .art-card button { padding-inline: 8px; font-size: .95rem; white-space: normal; }
 @media (min-width: 760px) { .arts { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+/* oferta do 2º enfeite: escolher e depois continuar */
+.up-option { grid-template-columns: auto 1fr auto !important; }
+.up-check { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); background: #fff; display: grid; place-items: center; }
+.up-option.on { border-color: var(--pine); background: var(--pine-soft); box-shadow: inset 0 0 0 1px var(--pine); }
+.up-option.on .up-check { background: var(--pine); border-color: var(--pine); }
+.up-option.on .up-check::after { content: "✓"; color: #fff; font-weight: 900; }
+.up-qty { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0 14px; font-weight: 800; }
+/* resumo final com a peça em 3D */
+.name-viewer { margin: 0 auto 6px; }

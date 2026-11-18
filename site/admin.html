@@ -75,6 +75,11 @@
       .order { grid-template-columns: 240px 1fr 300px; }
       .settings { grid-template-columns: 1fr 1fr; }
     }
+    .subtabs { flex-wrap: wrap; margin: 0 0 16px; }
+    .settings .card[hidden] { display: none; }
+    .save-bar { grid-column: 1 / -1; position: sticky; bottom: 0; z-index: 5; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg, #fbf6ee) 30%); }
+    .save-bar .btn { width: 100%; max-width: 360px; }
+    .test-warn { margin: 0 0 14px; padding: 12px 16px; border-radius: 14px; background: #fde8c8; color: #6a3d06; }
   </style>
 </head>
 <body>
@@ -110,9 +115,18 @@
     </section>
 
     <section id="tab-settings" style="padding:0" hidden>
+      <div class="test-warn" id="test-warn" hidden>⚠️ <b>Modo de teste ligado:</b> os pedidos não são cobrados. Desligue em <b>Vendas</b> antes de anunciar.</div>
+      <nav class="tabs subtabs" id="subtabs">
+        <button class="tab on" type="button" data-sub="vendas">💰 Vendas</button>
+        <button class="tab" type="button" data-sub="entrega">🚚 Entrega</button>
+        <button class="tab" type="button" data-sub="producao">🖨️ Produção</button>
+        <button class="tab" type="button" data-sub="avisos">🔔 Avisos</button>
+        <button class="tab" type="button" data-sub="loja">🏪 Loja</button>
+        <button class="tab" type="button" data-sub="chaves">🔑 Chaves e senha</button>
+      </nav>
       <form class="settings" id="settings">
-        <div class="card">
-          <h3>Loja</h3>
+        <div class="card" data-group="vendas">
+          <h3>Preço e artes</h3>
           <label class="field"><span>Preço do enfeite (R$)</span><input name="price" inputmode="decimal" required></label>
           <label class="field"><span>Artes por pedido <small>(tentativas do cliente)</small></span><input name="credits" type="number" min="1" max="10" required></label>
           <label class="field"><span>Cores do enfeite <small>(máximo, contando preto e branco)</small></span>
@@ -120,7 +134,7 @@
           <label class="switch"><input type="checkbox" name="test_mode"> Modo de teste <small class="muted">(pedidos sem cobrança)</small></label>
           <p class="small muted" style="margin:8px 0 0">Com o modo de teste ligado, qualquer pessoa cria pedidos grátis. Use só para testar e desligue antes de anunciar.</p>
         </div>
-        <div class="card">
+        <div class="card" data-group="vendas">
           <h3>Enfeites adicionais</h3>
           <p class="small muted">Oferecidos no fim da criação, depois que o cliente escolhe a arte (outro pet ou mais um igual, no mesmo pacote). Coloque 0 no máximo para não oferecer.</p>
           <div class="row3">
@@ -129,64 +143,13 @@
             <label class="field"><span>Tentativas por pet</span><input name="extra_credits" type="number" min="1" max="10"></label>
           </div>
         </div>
-        <div class="card">
-          <h3>🔔 Avisos de pedido no celular</h3>
-          <ol class="small" style="padding-left:1.2em;margin:0 0 12px">
-            <li>Instale o app gratuito <b>ntfy</b> (Play Store ou App Store).</li>
-            <li>Toque em “Gerar tópico” abaixo e depois em <b>Salvar</b> no fim da página.</li>
-            <li>No app ntfy, toque em <b>+</b> e digite o tópico: <b id="ntfy-link"></b></li>
-            <li>Toque em “Enviar notificação de teste”.</li>
-          </ol>
-          <label class="field"><span>Tópico secreto</span><input name="ntfy_topic" maxlength="64" autocomplete="off" placeholder="patinha-xxxxxxxxxxxx"></label>
-          <div class="row2">
-            <button class="btn ghost sm" type="button" id="ntfy-new">Gerar tópico</button>
-            <button class="btn ghost sm" type="button" id="ntfy-test">Enviar notificação de teste</button>
-          </div>
-          <p class="small muted" style="margin:10px 0 0">Você recebe um aviso a cada pedido pago e a cada pedido pronto para produzir. Dica: no celular, abra este painel e use “Adicionar à tela inicial” para ter um ícone de app.</p>
-        </div>
-        <div class="card">
+        <div class="card" data-group="entrega">
           <h3>Retirada</h3>
           <label class="switch"><input type="checkbox" name="pickup_enabled"> Oferecer retirada (sem frete)</label>
           <label class="field" style="margin-top:12px"><span>Local</span><input name="pickup_name" maxlength="80"></label>
           <label class="field"><span>Endereço</span><input name="pickup_address" maxlength="200"></label>
         </div>
-        <div class="card">
-          <h3>Mercado Pago <span class="state" id="mp-state"></span></h3>
-          <p class="small muted">Em mercadopago.com.br/developers → Suas integrações → Credenciais de produção → Access Token.</p>
-          <label class="field"><span>Access Token</span><input name="mp_access_token" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
-          <p class="small muted" style="margin-bottom:6px">Endereço de notificações (já é enviado automaticamente em cada pagamento):</p>
-          <code class="copy" id="webhook"></code>
-        </div>
-        <div class="card">
-          <h3>IA de imagem (OpenAI) <span class="state" id="ai-state"></span></h3>
-          <p class="small muted">Em platform.openai.com → API keys. É a conta de API (com créditos), não a assinatura do ChatGPT.</p>
-          <label class="field"><span>API Key</span><input name="openai_api_key" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
-          <div class="row2">
-            <label class="field"><span>Modelo</span><input name="openai_image_model"></label>
-            <label class="field"><span>Qualidade</span><select name="openai_image_quality"><option value="low">Baixa (mais barata)</option><option value="medium">Média</option><option value="high">Alta (mais cara)</option></select></label>
-          </div>
-        </div>
-        <div class="card">
-          <h3>Contato e dados da loja</h3>
-          <label class="field"><span>WhatsApp de atendimento <small>(com DDD)</small></span><input name="st_whatsapp" inputmode="numeric" placeholder="(11) 99999-8888"></label>
-          <label class="field"><span>Nome ou razão social</span><input name="st_company" maxlength="160"></label>
-          <div class="row2">
-            <label class="field"><span>CNPJ ou CPF</span><input name="st_cnpj" maxlength="30"></label>
-            <label class="field"><span>E-mail de contato</span><input name="st_email" type="email" maxlength="160"></label>
-          </div>
-          <div class="row2">
-            <label class="field"><span>Tamanho do enfeite</span><input name="st_size" maxlength="30" placeholder="8 cm"></label>
-            <label class="field"><span>Prazo de produção</span><input name="st_lead_time" maxlength="60" placeholder="5 dias úteis"></label>
-          </div>
-          <label class="field"><span>Aviso em destaque <small>(opcional)</small></span><input name="st_notice" maxlength="200" placeholder="Peça até 10/12 para receber antes do Natal"></label>
-        </div>
-        <div class="card">
-          <h3>Anúncios <small class="muted">(opcional)</small></h3>
-          <p class="small muted">Com os IDs preenchidos, o site avisa o Meta e o Google de cada início de compra e de cada venda.</p>
-          <label class="field"><span>ID do Pixel da Meta</span><input name="st_meta_pixel_id" inputmode="numeric" maxlength="40" placeholder="123456789012345"></label>
-          <label class="field"><span>ID da tag do Google</span><input name="st_google_tag_id" maxlength="40" placeholder="G-XXXXXXX ou AW-XXXXXXX"></label>
-        </div>
-        <div class="card">
+        <div class="card" data-group="entrega">
           <h3>Regiões atendidas e prazos</h3>
           <p class="small muted">Desmarque as regiões onde não quer entregar. A data é o último dia para pedir (para chegar antes do Natal); deixe vazia para não ter limite. O CEP é conferido antes do pagamento.</p>
           <div class="regions" id="regions">
@@ -197,18 +160,7 @@
             <label class="region"><input type="checkbox" name="rg_on_norte"> <b>Norte</b><input type="date" name="rg_until_norte"></label>
           </div>
         </div>
-        <div class="card">
-          <h3>Filamentos e peça 3D</h3>
-          <p class="small muted">A arte que o cliente vê já usa só estas cores. Uma por linha: <code>Nome #RRGGBB</code>. Cadastre só as cores que você tem.</p>
-          <label class="field"><span>Filamentos disponíveis</span><textarea name="filaments" rows="8" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:1rem"></textarea></label>
-          <div class="swatches" id="swatches"></div>
-          <div class="row3">
-            <label class="field"><span>Diâmetro (mm)</span><input name="model_diameter" inputmode="decimal"></label>
-            <label class="field"><span>Base (mm)</span><input name="model_base" inputmode="decimal"></label>
-            <label class="field"><span>Relevo por cor (mm)</span><input name="model_band" inputmode="decimal"></label>
-          </div>
-        </div>
-        <div class="card">
+        <div class="card" data-group="entrega">
           <h3>Frete</h3>
           <label class="field"><span>Como cobrar o frete</span>
             <select name="shipping_mode">
@@ -246,20 +198,82 @@
             </div>
           </div>
         </div>
-        <div class="card">
+        <div class="card" data-group="producao">
+          <h3>Filamentos e peça 3D</h3>
+          <p class="small muted">A arte que o cliente vê já usa só estas cores. Uma por linha: <code>Nome #RRGGBB</code>. Cadastre só as cores que você tem.</p>
+          <label class="field"><span>Filamentos disponíveis</span><textarea name="filaments" rows="8" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:1rem"></textarea></label>
+          <div class="swatches" id="swatches"></div>
+          <div class="row3">
+            <label class="field"><span>Diâmetro (mm)</span><input name="model_diameter" inputmode="decimal"></label>
+            <label class="field"><span>Base (mm)</span><input name="model_base" inputmode="decimal"></label>
+            <label class="field"><span>Relevo por cor (mm)</span><input name="model_band" inputmode="decimal"></label>
+          </div>
+        </div>
+        <div class="card" data-group="avisos">
+          <h3>🔔 Avisos de pedido no celular</h3>
+          <ol class="small" style="padding-left:1.2em;margin:0 0 12px">
+            <li>Instale o app gratuito <b>ntfy</b> (Play Store ou App Store).</li>
+            <li>Toque em “Gerar tópico” abaixo e depois em <b>Salvar</b> no fim da página.</li>
+            <li>No app ntfy, toque em <b>+</b> e digite o tópico: <b id="ntfy-link"></b></li>
+            <li>Toque em “Enviar notificação de teste”.</li>
+          </ol>
+          <label class="field"><span>Tópico secreto</span><input name="ntfy_topic" maxlength="64" autocomplete="off" placeholder="patinha-xxxxxxxxxxxx"></label>
+          <div class="row2">
+            <button class="btn ghost sm" type="button" id="ntfy-new">Gerar tópico</button>
+            <button class="btn ghost sm" type="button" id="ntfy-test">Enviar notificação de teste</button>
+          </div>
+          <p class="small muted" style="margin:10px 0 0">Você recebe um aviso a cada pedido pago e a cada pedido pronto para produzir. Dica: no celular, abra este painel e use “Adicionar à tela inicial” para ter um ícone de app.</p>
+        </div>
+        <div class="card" data-group="avisos">
           <h3>E-mails automáticos <span class="state" id="mail-state"></span></h3>
           <p class="small muted">O cliente recebe o link do pedido ao pagar, a confirmação e o rastreio; você recebe um aviso a cada pedido pronto para produzir. Crie uma conta grátis em resend.com, valide o seu domínio e gere uma API Key.</p>
           <label class="field"><span>API Key do Resend</span><input name="resend_api_key" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
           <label class="field"><span>Remetente <small>(e-mail do domínio validado)</small></span><input name="email_from" placeholder="Patinha de Natal &lt;pedidos@seudominio.com.br&gt;"></label>
           <label class="field"><span>Seu e-mail <small>(para receber os avisos)</small></span><input name="owner_email" type="email"></label>
         </div>
-        <div class="card">
+        <div class="card" data-group="loja">
+          <h3>Contato e dados da loja</h3>
+          <label class="field"><span>WhatsApp de atendimento <small>(com DDD)</small></span><input name="st_whatsapp" inputmode="numeric" placeholder="(11) 99999-8888"></label>
+          <label class="field"><span>Nome ou razão social</span><input name="st_company" maxlength="160"></label>
+          <div class="row2">
+            <label class="field"><span>CNPJ ou CPF</span><input name="st_cnpj" maxlength="30"></label>
+            <label class="field"><span>E-mail de contato</span><input name="st_email" type="email" maxlength="160"></label>
+          </div>
+          <div class="row2">
+            <label class="field"><span>Tamanho do enfeite</span><input name="st_size" maxlength="30" placeholder="8 cm"></label>
+            <label class="field"><span>Prazo de produção</span><input name="st_lead_time" maxlength="60" placeholder="5 dias úteis"></label>
+          </div>
+          <label class="field"><span>Aviso em destaque <small>(opcional)</small></span><input name="st_notice" maxlength="200" placeholder="Peça até 10/12 para receber antes do Natal"></label>
+        </div>
+        <div class="card" data-group="loja">
+          <h3>Anúncios <small class="muted">(opcional)</small></h3>
+          <p class="small muted">Com os IDs preenchidos, o site avisa o Meta e o Google de cada início de compra e de cada venda.</p>
+          <label class="field"><span>ID do Pixel da Meta</span><input name="st_meta_pixel_id" inputmode="numeric" maxlength="40" placeholder="123456789012345"></label>
+          <label class="field"><span>ID da tag do Google</span><input name="st_google_tag_id" maxlength="40" placeholder="G-XXXXXXX ou AW-XXXXXXX"></label>
+        </div>
+        <div class="card" data-group="chaves">
+          <h3>Mercado Pago <span class="state" id="mp-state"></span></h3>
+          <p class="small muted">Em mercadopago.com.br/developers → Suas integrações → Credenciais de produção → Access Token.</p>
+          <label class="field"><span>Access Token</span><input name="mp_access_token" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
+          <p class="small muted" style="margin-bottom:6px">Endereço de notificações (já é enviado automaticamente em cada pagamento):</p>
+          <code class="copy" id="webhook"></code>
+        </div>
+        <div class="card" data-group="chaves">
+          <h3>IA de imagem (OpenAI) <span class="state" id="ai-state"></span></h3>
+          <p class="small muted">Em platform.openai.com → API keys. É a conta de API (com créditos), não a assinatura do ChatGPT.</p>
+          <label class="field"><span>API Key</span><input name="openai_api_key" type="password" autocomplete="off" placeholder="Deixe em branco para manter"></label>
+          <div class="row2">
+            <label class="field"><span>Modelo</span><input name="openai_image_model"></label>
+            <label class="field"><span>Qualidade</span><select name="openai_image_quality"><option value="low">Baixa (mais barata)</option><option value="medium">Média</option><option value="high">Alta (mais cara)</option></select></label>
+          </div>
+        </div>
+        <div class="card" data-group="chaves">
           <h3>Senha do painel</h3>
           <label class="field"><span>Nova senha <small>(mín. 8 caracteres)</small></span><input name="new_password" type="password" autocomplete="new-password" placeholder="Deixe em branco para manter"></label>
         </div>
-        <div style="grid-column:1/-1">
+        <div class="save-bar">
           <div class="alert" id="settings-msg" hidden></div>
-          <button class="btn green" type="submit">Salvar configurações</button>
+          <button class="btn green" type="submit">💾 Salvar configurações</button>
         </div>
       </form>
     </section>

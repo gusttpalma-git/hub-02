@@ -140,23 +140,32 @@
           <span class="up-plus">+</span>
         </div>
         <h2>Quer levar mais um? 🎁</h2>
-        <p class="up-lead">O 2º enfeite sai por só <strong id="up-price">R$ 12,90</strong><br><span class="muted">no mesmo pacote, sem frete a mais</span></p>
+        <p class="up-lead">Cada enfeite a mais sai por só <strong id="up-price">R$ 12,90</strong><br><span class="muted">no mesmo pacote, sem frete a mais</span></p>
         <div class="alert error" id="upsell-error" hidden role="alert"></div>
         <div id="up-offer">
           <div class="up-options">
             <button type="button" class="up-option" data-up-kind="novo">
               <span class="up-ico" aria-hidden="true">🐾</span>
               <span class="up-text"><b>De outro pet</b><small>Você envia outra foto e escolhe a arte</small></span>
-              <span class="up-cta">Quero</span>
+              <span class="up-check" aria-hidden="true"></span>
             </button>
             <button type="button" class="up-option" data-up-kind="copia">
               <span class="up-ico" aria-hidden="true">🎁</span>
               <span class="up-text"><b>Igual a este</b><small>Para presentear, com outro nome no verso</small></span>
-              <span class="up-cta">Quero</span>
+              <span class="up-check" aria-hidden="true"></span>
             </button>
           </div>
-          <button class="btn ghost block" type="button" id="up-no">Não, obrigado. Continuar</button>
-          <p class="small muted" style="margin:12px 0 0">🔒 Você paga os <span data-up-price>R$ 12,90</span> no Mercado Pago e volta direto para cá.</p>
+          <div class="up-qty" id="up-qty-box" hidden>
+            <span>Quantos a mais?</span>
+            <div class="stepper" role="group" aria-label="Quantos enfeites a mais">
+              <button type="button" id="up-minus" aria-label="Menos um">−</button>
+              <output id="up-qty" aria-live="polite">1</output>
+              <button type="button" id="up-plus" aria-label="Mais um">+</button>
+            </div>
+          </div>
+          <button class="btn green block" type="button" id="up-go" disabled>Escolha uma opção acima</button>
+          <button class="btn ghost block" type="button" id="up-no" style="margin-top:10px">Não, obrigado. Continuar</button>
+          <p class="small muted" style="margin:12px 0 0">🔒 Pagamento seguro no Mercado Pago. Depois você volta direto para cá.</p>
         </div>
         <div id="up-waiting" hidden>
           <div class="spinner dark"></div>
@@ -184,9 +193,9 @@
     <section id="view-address" hidden>
       <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li class="on">3. Finalizar</li></ol>
       <form class="card" id="address-form" novalidate>
-        <h2 class="center">Confira o nome no verso</h2>
-        <div class="viewer name-viewer" id="name-viewer" hidden></div>
-        <p class="viewer-note" id="name-caption" hidden></p>
+        <h2 class="center">Confira o seu enfeite</h2>
+        <div class="viewer name-viewer" id="name-viewer"><div class="loading"><div class="spinner dark"></div>Montando a prévia…</div></div>
+        <p class="viewer-note" id="name-caption">Arraste para girar e ver o nome no verso.</p>
         <div id="names"></div>
         <p class="center" style="margin:-4px 0 18px"><button class="linklike" type="button" id="addr-extra" hidden></button></p>
 

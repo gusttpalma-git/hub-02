@@ -27,7 +27,25 @@
     if (c.extra_price_cents) document.querySelectorAll("[data-extra-price]").forEach((el) => { el.textContent = PN.money(c.extra_price_cents); });
     state.extraPrice = c.extra_max > 0 ? c.extra_price_cents || 0 : 0;
     $("#qty").hidden = !state.extraPrice;
-    $("#qty2-total").textContent = PN.money(c.price_cents + state.extraPrice);
+    // cartões 1, 2, 3… enfeites (o 1º pelo preço cheio, os outros pelo preço do adicional)
+    if (state.extraPrice) {
+      const grid = $("#qty .qty-grid");
+      grid.replaceChildren(...Array.from({ length: 1 + Math.min(3, c.extra_max) }, (_, n) => {
+        const label = document.createElement("label");
+        label.className = "qty-opt";
+        const input = document.createElement("input");
+        input.type = "radio"; input.name = "qty"; input.value = String(n); input.checked = n === 0;
+        input.addEventListener("change", () => { updateTotals(); if (state.quotedCep) requote(); });
+        const box = document.createElement("span");
+        if (n === 1) { const tag = document.createElement("i"); tag.className = "qty-tag"; tag.textContent = "🎁 para presentear"; box.appendChild(tag); }
+        const b = document.createElement("b"); b.textContent = (n + 1) + (n ? " enfeites" : " enfeite");
+        const st = document.createElement("strong"); st.textContent = PN.money(c.price_cents + n * state.extraPrice);
+        box.append(b, st);
+        if (n) { const sm = document.createElement("small"); sm.textContent = "+" + PN.money(state.extraPrice) + (n > 1 ? " cada a mais" : " o 2º"); box.appendChild(sm); }
+        label.append(input, box);
+        return label;
+      }));
+    }
     updateTotals();
     if (state.freeUpTo) document.querySelectorAll("[data-free-up]").forEach((el) => { el.textContent = PN.money(state.freeUpTo); });
     if (c.pickup) {
@@ -65,7 +83,7 @@
   // ───────── valor do pedido: enfeite + frete ─────────
 
   const state = { price: 4990, mode: "incluso", calcShipping: false, freeUpTo: null, quotedCep: "", cepError: "", shipping: 0, days: null, extraPrice: 0 };
-  const extras = () => (state.extraPrice && (form.querySelector("input[name=qty]:checked") || {}).value === "1" ? 1 : 0);
+  const extras = () => (state.extraPrice ? parseInt((form.querySelector("input[name=qty]:checked") || {}).value || "0", 10) || 0 : 0);
   const delivery = () => (form.querySelector("input[name=delivery]:checked") || {}).value || "correios";
 
   function updateTotals() {
@@ -75,6 +93,8 @@
     const total = state.price + ex * state.extraPrice + ship;
     const showShip = !pickup && state.calcShipping && state.quotedCep;
     $("#row-extra").hidden = !ex;
+    $("#row-extra").firstElementChild.textContent = ex > 1 ? ex + " enfeites a mais" : "2º enfeite";
+    $("#row-extra").lastElementChild.textContent = PN.money(ex * state.extraPrice);
     $("#qty-note").hidden = !ex;
     $("#quote-label").textContent = "";
     $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis 🎉";
@@ -84,8 +104,6 @@
     $("#btn-total").textContent = PN.money(total);
   }
 
-  // 1 ou 2 enfeites (o 2º pelo preço do adicional).
-  form.querySelectorAll("input[name=qty]").forEach((r) => r.addEventListener("change", () => { updateTotals(); if (state.quotedCep) requote(); }));
 
   // Entrega pelos Correios ou retirada no ponto.
   form.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => {
