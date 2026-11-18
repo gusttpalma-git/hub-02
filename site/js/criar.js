@@ -54,6 +54,20 @@
     return it && it.kind === "copia" ? o.chosen_generation : it && it.chosen_generation;
   }
   const genById = (id) => state.order.generations.find((g) => g.id === id);
+  // Nome no verso de cada enfeite: digitado logo depois de escolher a arte e guardado no aparelho.
+  const namesKey = () => "pn_names_" + state.order.code;
+  function nameOf(i) {
+    if (!state.names) {
+      try { state.names = JSON.parse(localStorage.getItem(namesKey()) || "{}"); } catch (_) { state.names = {}; }
+    }
+    if (state.names[i] !== undefined) return state.names[i];
+    return (i === 0 ? state.order.pet_name : (extraOf(i) || {}).pet_name) || "";
+  }
+  function setName(i, v) {
+    nameOf(i);
+    state.names[i] = v;
+    try { localStorage.setItem(namesKey(), JSON.stringify(state.names)); } catch (_) { /* modo privado */ }
+  }
   const pieces = () => [0, ...itemsOf(state.order).map((it) => it.position)];
   const pendingExtras = () => itemsOf(state.order).filter((it) => !it.kind || (it.kind === "novo" && !it.chosen_generation));
 
@@ -297,6 +311,8 @@
     const picked = chosenArt();
     $("#viewer-block").hidden = !picked || state.mode !== "idle";
     if (picked && state.mode === "idle") show3D(picked);
+    const pn = $("#pet-name");
+    if (document.activeElement !== pn) pn.value = nameOf(state.item);
 
     // tipo de pet: aparece enquanto a pessoa escolhe ou confere a foto
     $("#species-block").hidden = !(picking || state.mode === "preview");
@@ -441,8 +457,6 @@
   function renderNames() {
     const box = $("#names");
     const o = state.order;
-    if (box.dataset.for === o.code + pieces().length) return;
-    box.dataset.for = o.code + pieces().length;
     const many = pieces().length > 1;
     box.replaceChildren(...pieces().map((i) => {
       const label = document.createElement("label");
@@ -453,13 +467,11 @@
       input.maxLength = 16;
       input.dataset.item = i;
       input.placeholder = "Ex.: Mel";
-      input.value = (i === 0 ? o.pet_name : (extraOf(i) || {}).pet_name) || "";
-      input.addEventListener("input", () => previewName(i, input.value));
-      input.addEventListener("focus", () => previewName(i, input.value));
+      input.value = nameOf(i);
+      input.addEventListener("input", () => setName(i, input.value));
       label.append(span, input);
       return label;
     }));
-    previewName(0, box.querySelector("input").value);
   }
 
   let nameTimer = null, nameSeq = 0;
@@ -509,6 +521,10 @@
       $("#pickup-map").href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(pk.name + ", " + pk.address);
     }
     renderNames();
+    const ax = $("#addr-extra");
+    const u = o.upsell || {};
+    ax.hidden = !(u.max > 0 && u.price_cents > 0) && !itemsOf(o).length;
+    ax.textContent = u.max > 0 ? `🎁 Quer um 2º enfeite? Adicionar por ${PN.money(u.price_cents)}` : "Mudar o 2º enfeite (outro pet ou igual)";
     if (!f.dataset.filled) {
       f.dataset.filled = "1";
       const a = o.address || {};
@@ -725,8 +741,8 @@
 
   // ───────── prévia 3D ─────────
 
-  async function show3D(art) {
-    if (state.viewerFor === art.id || !window.PN3D) return;
+  async function show3D(art, back) {
+    if ((state.viewerFor === art.id && !back) || !window.PN3D) return;
     state.viewerFor = art.id;
     const box = $("#viewer");
     if (state.viewer) { state.viewer.destroy(); state.viewer = null; }
@@ -739,10 +755,10 @@
         band: c.model && c.model.band,
         filaments: c.filaments || [],
         brand: (PN.config && PN.config.MARCA) || "Patinha de Natal",
-        petName: (state.item === 0 ? state.order.pet_name : (extraOf(state.item) || {}).pet_name) || "",
+        petName: nameOf(state.item).trim(),
       });
       if (state.viewerFor !== art.id) return;
-      state.viewer = await PN3D.view(box, model, { spin: true });
+      state.viewer = await PN3D.view(box, model, back ? { spin: true, hold: true, pose: { x: 0.05, y: Math.PI } } : { spin: true });
     } catch (err) {
       // sem WebGL ou arte inacessível: mostra a foto do enfeite com a arte aplicada
       console.warn("prévia 3D indisponível", err);
@@ -796,6 +812,18 @@
     state.barTimer = null;
   }
 
+  // Nome no verso: atualiza a prévia 3D virada de costas para mostrar o nome gravado.
+  let petNameTimer = null;
+  $("#pet-name").addEventListener("input", (e) => {
+    setName(state.item, e.target.value);
+    clearTimeout(petNameTimer);
+    petNameTimer = setTimeout(() => {
+      const art = chosenArt();
+      if (art) show3D(art, true);
+      $("#viewer-note").textContent = e.target.value.trim() ? "Assim fica o nome gravado no verso. Arraste para ver a frente." : "Arraste para girar.";
+    }, 500);
+  });
+
   // ───────── eventos ─────────
 
   $("#file").addEventListener("change", (e) => { onFile(e.target.files[0]); e.target.value = ""; });
@@ -829,6 +857,12 @@
   $("#extras-next").addEventListener("click", () => { state.step = "address"; render(); });
   $("#extras-back").addEventListener("click", () => { state.item = 0; state.step = "studio"; render(); });
   $("#up-no").addEventListener("click", skipUpsell);
+  $("#addr-extra").addEventListener("click", () => {
+    state.upsellReturn = false;
+    state.step = (state.order.upsell || {}).max > 0 ? "upsell" : "extras";
+    render();
+    window.scrollTo(0, 0);
+  });
   $("#up-skip").addEventListener("click", skipUpsell);
   $("#up-retry").addEventListener("click", () => { state.upsellReturn = false; renderUpsell(); });
   document.querySelectorAll("[data-up-kind]").forEach((btn) => btn.addEventListener("click", async () => {

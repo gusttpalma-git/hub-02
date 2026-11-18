@@ -1,0 +1,21 @@
+Registros para colocar no DNS do domínio eezo.com.br (HostGator → cPanel → Zone Editor / Editor de Zona DNS)
+
+1) TXT
+   Nome:  resend._domainkey
+   Valor: p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDEdAV+m5wvLTkvebEWQYP/zw2MWjEwNDDW3YGTJ+vC1n76wls7ykyf4+F52baXM+qmrOgXHrrHvDtzHziXFvHyMdvqMTDCzPGb7OgISydnj9ql47Ru+sF+UlDvRrBsBmSryqsrZjAH0NEQcsRiQhEn0a/USYWIxojU9dGGR0la2QIDAQAB
+
+2) MX
+   Nome:       send
+   Valor:      feedback-smtp.sa-east-1.amazonses.com
+   Prioridade: 10
+
+3) TXT
+   Nome:  send
+   Valor: v=spf1 include:amazonses.com ~all
+
+4) CNAME
+   Nome:  rsend
+   Valor: send.forge.rmta.net
+
+Depois de salvar, avise que eu peço a verificação ao Resend (ou clique em "Verify" no painel do Resend).
+Até verificar, os e-mails de pedidos@eezo.com.br não saem.
