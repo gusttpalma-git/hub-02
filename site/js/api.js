@@ -84,13 +84,20 @@
       return d.length > 5 ? d.slice(0, 5) + "-" + d.slice(5) : d;
     },
 
-    // Eventos de conversão para anúncios. Só funciona se os IDs estiverem no config.js.
+    // Eventos de conversão para anúncios (Meta, Google e TikTok). Só dispara se houver ID no painel ou no config.js.
     track(event, data) {
       try {
         if (window.fbq) window.fbq("track", event, data || {});
         if (window.gtag) {
           const map = { InitiateCheckout: "begin_checkout", Purchase: "purchase", PageView: "page_view" };
           window.gtag("event", map[event] || event, data || {});
+        }
+        if (window.ttq && event !== "PageView") {
+          const map = { InitiateCheckout: "InitiateCheckout", Purchase: "CompletePayment" };
+          const d = data || {};
+          const props = { value: d.value, currency: d.currency || "BRL", content_type: "product", content_id: "enfeite-pet" };
+          if (!d.transaction_id) window.ttq.track(map[event] || event, props);
+          else window.ttq.track(map[event] || event, Object.assign(props, { order_id: d.transaction_id }), { event_id: event + "_" + d.transaction_id });
         }
       } catch (_) { /* bloqueador de anúncios */ }
     },
@@ -118,7 +125,7 @@
   };
 
   let tracking = false;
-  function initTracking(metaId, googleId) {
+  function initTracking(metaId, googleId, tiktokId) {
     if (tracking) return;
     tracking = true;
     if (metaId) {
@@ -138,6 +145,14 @@
       window.gtag("js", new Date());
       window.gtag("config", googleId);
     }
+    if (tiktokId) {
+      // Código oficial do TikTok Pixel (analytics.tiktok.com).
+      /* eslint-disable */
+      !function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=d.createElement("script");n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=d.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};}(window,document,"ttq");
+      /* eslint-enable */
+      window.ttq.load(tiktokId);
+      window.ttq.page();
+    }
   }
 
   // Configuração pública da loja (preço, contato, avisos). Todas as páginas esperam por ela.
@@ -146,7 +161,7 @@
     PN.publicConfig = c;
     return c;
   }).catch(() => null).then((c) => {
-    initTracking(PN.store.meta_pixel_id || C.META_PIXEL_ID, PN.store.google_tag_id || C.GOOGLE_TAG_ID);
+    initTracking(PN.store.meta_pixel_id || C.META_PIXEL_ID, PN.store.google_tag_id || C.GOOGLE_TAG_ID, PN.store.tiktok_pixel_id || C.TIKTOK_PIXEL_ID);
     if (document.readyState !== "loading") PN.applyBrand();
     return c;
   });
