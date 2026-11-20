@@ -421,7 +421,7 @@
     alert.hidden = !parts.length;
   }
 
-  const STORE_FIELDS = ["whatsapp", "company", "cnpj", "email", "size", "lead_time", "notice", "meta_pixel_id", "google_tag_id"];
+  const STORE_FIELDS = ["whatsapp", "company", "cnpj", "email", "size", "lead_time", "notice", "meta_pixel_id", "google_tag_id", "tiktok_pixel_id"];
   const REGIONS = ["sudeste", "sul", "centro_oeste", "nordeste", "norte"];
   const toCents = (text) => {
     const raw = String(text).trim().replace(/[^\d.,]/g, "");

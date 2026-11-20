@@ -212,6 +212,7 @@ function cfg(s: Settings) {
       notice: s.store_notice || "",
       meta_pixel_id: s.meta_pixel_id || "",
       google_tag_id: s.google_tag_id || "",
+      tiktok_pixel_id: s.tiktok_pixel_id || "",
     },
   };
 }
@@ -1116,6 +1117,7 @@ async function adminSaveSettings(b: Body) {
       ["company", "store_company", 160], ["cnpj", "store_cnpj", 30], ["email", "store_email", 160],
       ["size", "store_size", 30], ["lead_time", "store_lead_time", 60], ["notice", "store_notice", 200],
       ["meta_pixel_id", "meta_pixel_id", 40], ["google_tag_id", "google_tag_id", 40],
+      ["tiktok_pixel_id", "tiktok_pixel_id", 40],
     ];
     for (const [field, key, max] of text) if (typeof st[field] === "string") await saveSetting(key, clean(st[field], max));
     if (typeof st.whatsapp === "string") {
