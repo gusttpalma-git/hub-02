@@ -164,7 +164,13 @@ function cfg(s: Settings) {
     adminHash: s.admin_password_hash || "",
     filaments: parseFilaments(s.filaments),
     // Enfeite adicional: oferecido no fim da criação (depois de escolher a arte), preço único.
-    extraPrice: Math.max(0, parseInt(s.extra_price_cents || "1290", 10) || 0),
+    // Preço de cada enfeite a mais: [2º, 3º, 4º] (escada de kits: 1 por 39,90 · 2 por 59,90 · 3 por 74,90…)
+    extraPrices: (() => {
+      const l = String(s.extra_prices_cents || s.extra_price_cents || "2000,1500,1500").split(",").map((v) => Math.max(0, parseInt(v, 10) || 0));
+      while (l.length < 3) l.push(l[l.length - 1] ?? 0);
+      return l.slice(0, 3);
+    })(),
+    get extraPrice() { return this.extraPrices[0]; },
     extraMax: Math.min(3, Math.max(0, parseInt(s.extra_max ?? "3", 10) || 0)),
     extraCredits: Math.min(10, Math.max(1, parseInt(s.extra_credits || "3", 10) || 3)),
     model: {
@@ -413,7 +419,9 @@ async function orderView(order: any) {
   return {
     extras: o.extras,
     upsell: {
-      price_cents: c.extraPrice,
+      price_cents: c.extraPrices[Math.min(2, o.extras ?? 0)],
+      prices: c.extraPrices.slice(o.extras ?? 0, c.extraMax),
+      main_cents: c.priceCents,
       max: Math.max(0, c.extraMax - (o.extras ?? 0)),
       pending: (upPending ?? 0) > 0,
     },
@@ -526,6 +534,7 @@ async function publicConfig() {
     store: c.store,
     pickup: c.pickup.enabled ? { name: c.pickup.name, address: c.pickup.address } : null,
     extra_price_cents: c.extraMax > 0 ? c.extraPrice : 0,
+    extra_prices: c.extraMax > 0 ? c.extraPrices.slice(0, c.extraMax) : [],
     extra_max: c.extraPrice > 0 ? c.extraMax : 0,
     extra_credits: c.extraCredits,
     model: c.model,
@@ -545,10 +554,15 @@ async function openArt(url: URL) {
   return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
 
-// Quantos enfeites a mais já na compra (0 ou até extra_max), todos pelo preço do adicional.
+// Soma do preço de `n` enfeites a mais a partir da posição `from` (0 = o 2º enfeite do pedido).
+function extrasCents(c: ReturnType<typeof cfg>, from: number, n: number) {
+  return c.extraPrices.slice(from, from + n).reduce((a, b) => a + b, 0);
+}
+
+// Quantos enfeites a mais já na compra (0 ou até extra_max), pela escada de preços.
 function extrasOf(c: ReturnType<typeof cfg>, v: unknown) {
   const n = c.extraPrice > 0 ? Math.max(0, Math.min(c.extraMax, parseInt(String(v ?? 0), 10) || 0)) : 0;
-  return { n, cents: n * c.extraPrice };
+  return { n, cents: extrasCents(c, 0, n) };
 }
 
 // Pacote um pouco mais pesado quando vão mais peças (≈ 20 g cada).
@@ -691,13 +705,13 @@ async function checkout(b: Body) {
           quantity: 1,
           currency_id: "BRL",
           unit_price: c.priceCents / 100,
-        }, ...(ex.n ? [{
-          id: "enfeite-adicional",
-          title: ex.n === 1 ? "2º enfeite" : `${ex.n} enfeites a mais`,
-          quantity: ex.n,
+        }, ...c.extraPrices.slice(0, ex.n).map((cents, i) => ({
+          id: "enfeite-adicional-" + (i + 2),
+          title: `${i + 2}º enfeite`,
+          quantity: 1,
           currency_id: "BRL",
-          unit_price: c.extraPrice / 100,
-        }] : []), ...(shipping.cents > 0 ? [{
+          unit_price: cents / 100,
+        })), ...(shipping.cents > 0 ? [{
           id: "frete",
           title: "Frete",
           description: shipping.label,
@@ -817,7 +831,7 @@ async function addExtras(b: Body) {
   const qty = parseInt(String(b.qty ?? 1), 10) || 0;
   if (room <= 0) throw new HttpError(400, "Este pedido já tem o máximo de enfeites.");
   if (!(qty >= 1 && qty <= room)) throw new HttpError(400, `Escolha de 1 a ${room} enfeite(s).`);
-  const amount = qty * c.extraPrice;
+  const amount = extrasCents(c, order.extras ?? 0, qty);
   const kind = ["novo", "copia"].includes(b.kind) ? b.kind : null;
 
   const { data: up, error } = await db.from("pn_upsells").insert({ order_id: order.id, qty, amount_cents: amount, kind }).select("id").single();
@@ -836,11 +850,11 @@ async function addExtras(b: Body) {
       body: JSON.stringify({
         items: [{
           id: "enfeite-adicional",
-          title: kind === "copia" ? "2º enfeite (igual ao primeiro)" : kind === "novo" ? "2º enfeite (outro pet)" : qty === 1 ? "Enfeite adicional" : `${qty} enfeites adicionais`,
+          title: (qty === 1 ? "Enfeite a mais" : `${qty} enfeites a mais`) + (kind === "copia" ? " (igual ao primeiro)" : kind === "novo" ? " (outro pet)" : ""),
           description: `Pedido ${order.code}`,
-          quantity: qty,
+          quantity: 1,
           currency_id: "BRL",
-          unit_price: c.extraPrice / 100,
+          unit_price: amount / 100,
         }],
         payer: { name: order.name, email: order.email },
         external_reference: "up:" + up.id,
@@ -982,7 +996,7 @@ function settingsView(s: Settings) {
     owner_email: c.ownerEmail,
     store: c.store,
     pickup: c.pickup,
-    extra_price_cents: c.extraPrice,
+    extra_prices_cents: c.extraPrices,
     extra_max: c.extraMax,
     extra_credits: c.extraCredits,
     free_shipping_up_to_cents: c.shipping.freeUpTo,
@@ -1111,10 +1125,10 @@ async function adminSaveSettings(b: Body) {
       await saveSetting("store_whatsapp", w);
     }
   }
-  if (b.extra_price_cents !== undefined) {
-    const v = Math.round(Number(b.extra_price_cents) || 0);
-    if (!(v === 0 || (v >= 100 && v <= 1000000))) throw new HttpError(400, "Preço do enfeite adicional inválido.");
-    await saveSetting("extra_price_cents", String(v));
+  if (Array.isArray(b.extra_prices_cents)) {
+    const l = b.extra_prices_cents.slice(0, 3).map((v: unknown) => Math.round(Number(v) || 0));
+    if (l.some((v: number) => !(v === 0 || (v >= 100 && v <= 1000000)))) throw new HttpError(400, "Preço do enfeite a mais inválido.");
+    await saveSetting("extra_prices_cents", l.join(","));
   }
   if (b.extra_max !== undefined) {
     const v = parseInt(b.extra_max, 10);

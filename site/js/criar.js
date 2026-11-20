@@ -451,7 +451,16 @@
     show("upsell");
     const art = genById(o.chosen_generation);
     ["#up-art1", "#up-art2"].forEach((id) => { $(id).src = art && art.url ? art.url : "img/exemplo-4-arte.png"; });
-    $("#up-price").textContent = PN.money(u.price_cents);
+    const prices = u.prices && u.prices.length ? u.prices : [u.price_cents];
+    const nth = itemsOf(o).length + 2;   // o 2º, 3º ou 4º enfeite do pedido
+    const sum = (q) => prices.slice(0, q).reduce((a, b) => a + b, 0);
+    $("#up-lead").innerHTML = "";
+    const l1 = document.createElement("span");
+    l1.append(`O ${nth}º enfeite sai por só `);
+    const strong = document.createElement("strong"); strong.textContent = PN.money(prices[0]); l1.append(strong);
+    const l2 = document.createElement("span"); l2.className = "muted";
+    l2.textContent = nth === 2 && u.main_cents ? `fica ${PN.money(Math.round((u.main_cents + prices[0]) / 2))} cada · mesmo pacote, sem frete a mais` : "no mesmo pacote, sem frete a mais";
+    $("#up-lead").append(l1, document.createElement("br"), l2);
     document.querySelectorAll("[data-up-price]").forEach((el) => { el.textContent = PN.money(u.price_cents); });
     state.upQty = Math.max(1, Math.min(state.upQty || 1, u.max || 1));
     $("#up-qty-box").hidden = !state.upKind || (u.max || 0) <= 1;
@@ -461,7 +470,7 @@
     document.querySelectorAll("[data-up-kind]").forEach((b) => b.classList.toggle("on", b.dataset.upKind === state.upKind));
     const go = $("#up-go");
     go.disabled = !state.upKind;
-    go.textContent = state.upKind ? `Continuar para o pagamento · ${PN.money(state.upQty * u.price_cents)}` : "Escolha uma opção acima";
+    go.textContent = state.upKind ? `Continuar para o pagamento · ${PN.money(sum(state.upQty))}` : "Escolha uma opção acima";
     const waiting = state.upsellReturn && u.pending;
     $("#up-offer").hidden = waiting;
     $("#up-waiting").hidden = !waiting;

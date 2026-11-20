@@ -135,13 +135,19 @@
           <p class="small muted" style="margin:8px 0 0">Com o modo de teste ligado, qualquer pessoa cria pedidos grátis. Use só para testar e desligue antes de anunciar.</p>
         </div>
         <div class="card" data-group="vendas">
-          <h3>Enfeites adicionais</h3>
-          <p class="small muted">Oferecidos no fim da criação, depois que o cliente escolhe a arte (outro pet ou mais um igual, no mesmo pacote). Coloque 0 no máximo para não oferecer.</p>
+          <h3>Kits (enfeites a mais)</h3>
+          <p class="small muted">O cliente escolhe 1 a 4 enfeites no pedido ou adiciona no fim da criação. Cada um a mais custa o valor abaixo (é o que forma o preço do kit). Coloque 0 no máximo para não oferecer.</p>
           <div class="row3">
-            <label class="field"><span>Preço de cada (R$)</span><input name="extra_price" inputmode="decimal"></label>
-            <label class="field"><span>Máximo por pedido</span><input name="extra_max" type="number" min="0" max="3"></label>
-            <label class="field"><span>Tentativas por pet</span><input name="extra_credits" type="number" min="1" max="10"></label>
+            <label class="field"><span>2º enfeite (R$)</span><input name="extra_0" inputmode="decimal"></label>
+            <label class="field"><span>3º enfeite (R$)</span><input name="extra_1" inputmode="decimal"></label>
+            <label class="field"><span>4º enfeite (R$)</span><input name="extra_2" inputmode="decimal"></label>
           </div>
+          <p class="small" id="kit-preview" style="margin:0 0 12px"></p>
+          <div class="row2">
+            <label class="field"><span>Máximo de enfeites a mais</span><input name="extra_max" type="number" min="0" max="3"></label>
+            <label class="field"><span>Artes por pet a mais</span><input name="extra_credits" type="number" min="1" max="10"></label>
+          </div>
+        </div>
         </div>
         <div class="card" data-group="entrega">
           <h3>Retirada</h3>

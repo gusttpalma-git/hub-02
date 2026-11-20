@@ -720,3 +720,22 @@ dialog.ask p { margin: 0 0 18px; }
 .up-qty { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0 14px; font-weight: 800; }
 /* resumo final com a peça em 3D */
 .name-viewer { margin: 0 auto 6px; }
+/* guirlanda que emenda sem falhas (cada pedaço termina na mesma altura, com um laço na emenda) */
+.garland { background: url("../img/guirlanda.svg") repeat-x 0 0 / auto 100% !important; height: 92px !important; top: 0 !important; }
+@media (min-width: 760px) { .garland { height: 118px !important; } }
+/* aviso de pedido em andamento: pílula fixa no rodapé, pequena e fechável */
+.resume { position: fixed; z-index: 30; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 24px);
+  padding: 8px 8px 8px 14px; border-radius: 999px; background: var(--pine-deep); color: #fff; font-weight: 700; font-size: .92rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25); animation: resume-in .4s ease both; }
+.resume[hidden] { display: none; }
+@keyframes resume-in { from { opacity: 0; transform: translate(-50%, 20px); } }
+.resume #resume-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resume-go { flex: none; padding: 8px 14px; border-radius: 999px; background: #fff; color: var(--pine-deep); text-decoration: none; font-weight: 800; white-space: nowrap; }
+.resume-x { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .15); color: #fff; font-size: 1.2rem; line-height: 1; cursor: pointer; }
+body.has-resume .sticky-cta { display: none; }
+body.has-resume footer { padding-bottom: 90px; }
+/* os 4 pontos fortes centralizados (a lista tinha recuo padrão à esquerda) */
+.perks-grid { padding: 0; margin-inline: auto; }
+.hero-offer { padding-top: 18px; }
+@media (min-width: 760px) { .hero-offer { padding-top: 26px; } }

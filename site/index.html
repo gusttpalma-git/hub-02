@@ -25,8 +25,11 @@
     </div>
   </header>
 
-  <div class="resume" id="resume" hidden>
-    <div class="wrap"><span id="resume-text"></span><a class="btn sm green" id="resume-go" href="criar.html"></a></div>
+  <div class="resume" id="resume" hidden role="status">
+    <span class="resume-ico" aria-hidden="true">🐾</span>
+    <span id="resume-text"></span>
+    <a class="resume-go" id="resume-go" href="criar.html"></a>
+    <button class="resume-x" type="button" id="resume-x" aria-label="Fechar aviso">×</button>
   </div>
 
   <main>
@@ -43,8 +46,8 @@
           <p class="notice" data-aviso hidden></p>
           <div class="offer">
             <div class="price">
-              <strong data-price>R$ 49,90</strong>
-              <span>Pix ou cartão</span>
+              <strong data-price>R$ 39,90</strong>
+              <span id="hero-kit">Pix ou cartão</span>
             </div>
             <p class="free-ship"><span aria-hidden="true">🚚</span> <b data-frete>Frete grátis</b><span data-frete-sub>para quase todo o Brasil</span></p>
           </div>
@@ -205,12 +208,12 @@
               <input name="cep" inputmode="numeric" autocomplete="postal-code" required placeholder="00000-000"></label>
             <p class="small muted" id="quote-status" style="margin:-8px 0 14px" aria-live="polite"></p>
             <div class="totals" id="totals" hidden>
-              <div><span>Enfeite personalizado</span><span data-price>R$ 49,90</span></div>
+              <div><span>Enfeite personalizado</span><span data-price>R$ 39,90</span></div>
               <div id="row-extra" hidden><span>2º enfeite</span><span data-extra-price>R$ 12,90</span></div>
               <div id="row-ship"><span>Frete <small class="muted" id="quote-label"></small></span><span id="quote-shipping"></span></div>
               <div class="total"><span>Total</span><span id="quote-total"></span></div>
             </div>
-            <button class="btn block" type="submit" id="checkout-btn">Pagar <span id="btn-total" data-price>R$ 49,90</span></button>
+            <button class="btn block" type="submit" id="checkout-btn">Pagar <span id="btn-total" data-price>R$ 39,90</span></button>
             <div class="secure-box">
               <p><b>🔒 Pagamento 100% seguro pelo Mercado Pago</b> (Pix ou cartão). Seus dados de pagamento não passam pela gente.</p>
               <p><b>📸 Pagou, voltou:</b> logo depois do pagamento você cai na área de criação e já envia a foto do seu pet.</p>
@@ -243,7 +246,7 @@
         <details><summary>O pagamento é seguro?</summary><p>Sim. O pagamento é feito no Mercado Pago, com Pix ou cartão. Os dados do seu cartão vão direto para eles e nunca passam pela gente.</p></details>
         <details><summary>Serve para gato, ave e outros bichinhos?</summary><p>Sim. Você escolhe se é gato, cachorro, ave ou roedor, e a arte é feita pensando nos detalhes de cada um, como a cor dos olhos dos gatos.</p></details>
         <details><summary>As cores ficam iguais às da tela?</summary><p>A prévia já mostra as cores dos filamentos que usamos. Como a peça é impressa em plástico, com relevo, pode haver pequenas diferenças de tom.</p></details>
-        <details><summary>Posso pedir mais de um enfeite?</summary><p>Pode: cada enfeite a mais sai por <span data-extra-price>R$ 12,90</span> (até 3 a mais). Escolha a quantidade no pedido ou adicione depois de criar a arte. Ele pode ser de outro pet ou igual ao primeiro (com outro nome no verso) e vai no mesmo pacote, sem frete a mais.</p></details>
+        <details><summary>Posso pedir mais de um enfeite?</summary><p>Pode, e sai mais barato: <span data-kit-row>2 por <b data-kit="2">R$ 59,90</b></span><span data-kit-row>, 3 por <b data-kit="3">R$ 74,90</b></span><span data-kit-row> e 4 por <b data-kit="4">R$ 89,90</b></span>. Escolha a quantidade no pedido ou adicione depois de criar a arte. Cada um pode ser de outro pet ou igual ao primeiro (com outro nome no verso), e todos vão no mesmo pacote, sem frete a mais.</p></details>
         <details><summary>Posso retirar em vez de receber em casa?</summary><p>Pode, sem frete: a retirada é no Studio Lina Palma, Rua 7 de Setembro, 433, Centro, Cosmópolis (SP). Avisamos pelo WhatsApp quando estiver pronto.</p></details>
       </div>
     </section>
@@ -265,7 +268,7 @@
     </div>
   </footer>
 
-  <div class="sticky-cta" id="sticky"><a class="btn block" href="#comprar">Pedir agora · <span data-price>R$ 49,90</span></a></div>
+  <div class="sticky-cta" id="sticky"><a class="btn block" href="#comprar">Pedir agora · <span data-price>R$ 39,90</span></a></div>
 
   <dialog id="lightbox" class="lightbox" aria-label="Foto ampliada">
     <button class="close" type="button" aria-label="Fechar" data-close>×</button>

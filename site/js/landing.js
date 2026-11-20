@@ -24,8 +24,17 @@
     state.calcShipping = c.shipping_mode !== "incluso";
     state.freeUpTo = c.free_shipping_up_to_cents;
     renderDeadlines(c.regions || []);
-    if (c.extra_price_cents) document.querySelectorAll("[data-extra-price]").forEach((el) => { el.textContent = PN.money(c.extra_price_cents); });
-    state.extraPrice = c.extra_max > 0 ? c.extra_price_cents || 0 : 0;
+    // Escada de kits: total de n+1 enfeites = preço + soma dos n primeiros adicionais.
+    state.extraPrices = (c.extra_max > 0 && c.extra_prices) ? c.extra_prices : [];
+    state.extraPrice = state.extraPrices[0] || 0;
+    const kitTotal = (n) => c.price_cents + state.extraPrices.slice(0, n).reduce((a, b) => a + b, 0);
+    document.querySelectorAll("[data-kit]").forEach((el) => {
+      const n = parseInt(el.dataset.kit, 10) - 1;
+      el.textContent = n <= state.extraPrices.length ? PN.money(kitTotal(n)) : "";
+      const row = el.closest("[data-kit-row]");
+      if (row) row.hidden = n > state.extraPrices.length;
+    });
+    if (state.extraPrice) $("#hero-kit").textContent = `ou 2 por ${PN.money(kitTotal(1))} · Pix ou cartão`;
     $("#qty").hidden = !state.extraPrice;
     // cartões 1, 2, 3… enfeites (o 1º pelo preço cheio, os outros pelo preço do adicional)
     if (state.extraPrice) {
@@ -37,11 +46,11 @@
         input.type = "radio"; input.name = "qty"; input.value = String(n); input.checked = n === 0;
         input.addEventListener("change", () => { updateTotals(); if (state.quotedCep) requote(); });
         const box = document.createElement("span");
-        if (n === 1) { const tag = document.createElement("i"); tag.className = "qty-tag"; tag.textContent = "🎁 para presentear"; box.appendChild(tag); }
+        if (n === 1) { const tag = document.createElement("i"); tag.className = "qty-tag"; tag.textContent = "💚 melhor custo"; box.appendChild(tag); }
         const b = document.createElement("b"); b.textContent = (n + 1) + (n ? " enfeites" : " enfeite");
-        const st = document.createElement("strong"); st.textContent = PN.money(c.price_cents + n * state.extraPrice);
+        const st = document.createElement("strong"); st.textContent = PN.money(kitTotal(n));
         box.append(b, st);
-        if (n) { const sm = document.createElement("small"); sm.textContent = "+" + PN.money(state.extraPrice) + (n > 1 ? " cada a mais" : " o 2º"); box.appendChild(sm); }
+        if (n) { const sm = document.createElement("small"); sm.textContent = PN.money(Math.round(kitTotal(n) / (n + 1))) + " cada"; box.appendChild(sm); }
         label.append(input, box);
         return label;
       }));
@@ -82,7 +91,8 @@
 
   // ───────── valor do pedido: enfeite + frete ─────────
 
-  const state = { price: 4990, mode: "incluso", calcShipping: false, freeUpTo: null, quotedCep: "", cepError: "", shipping: 0, days: null, extraPrice: 0 };
+  const state = { price: 3990, mode: "incluso", calcShipping: false, freeUpTo: null, quotedCep: "", cepError: "", shipping: 0, days: null, extraPrice: 0, extraPrices: [] };
+  const extrasSum = (n) => state.extraPrices.slice(0, n).reduce((a, b) => a + b, 0);
   const extras = () => (state.extraPrice ? parseInt((form.querySelector("input[name=qty]:checked") || {}).value || "0", 10) || 0 : 0);
   const delivery = () => (form.querySelector("input[name=delivery]:checked") || {}).value || "correios";
 
@@ -90,11 +100,11 @@
     const pickup = delivery() === "retirada";
     const ship = pickup ? 0 : state.shipping;
     const ex = extras();
-    const total = state.price + ex * state.extraPrice + ship;
+    const total = state.price + extrasSum(ex) + ship;
     const showShip = !pickup && state.calcShipping && state.quotedCep;
     $("#row-extra").hidden = !ex;
     $("#row-extra").firstElementChild.textContent = ex > 1 ? ex + " enfeites a mais" : "2º enfeite";
-    $("#row-extra").lastElementChild.textContent = PN.money(ex * state.extraPrice);
+    $("#row-extra").lastElementChild.textContent = PN.money(extrasSum(ex));
     $("#qty-note").hidden = !ex;
     $("#quote-label").textContent = "";
     $("#quote-shipping").textContent = ship ? PN.money(ship) : "Grátis 🎉";
@@ -153,16 +163,24 @@
     link.addEventListener("click", (e) => { e.stopImmediatePropagation(); location.href = "criar.html"; }, true);
     PN.api("order", { token: saved }).then(({ order: o }) => {
       let text = "", go = "";
-      if (o.payment_status === "pending") { text = "Seu pedido está esperando o pagamento."; go = "Pagar agora"; }
+      if (o.payment_status === "pending") { text = "Falta pagar o pedido"; go = "Pagar"; }
       else if (o.payment_status === "paid" && !o.confirmed) {
-        text = o.generations.length ? "Seu pedido ainda não foi finalizado." : "🎉 Pagamento confirmado! Falta enviar a foto do seu pet.";
+        text = o.generations.length ? "Pedido não finalizado" : "Falta enviar a foto";
         go = o.generations.length ? "Continuar" : "Enviar a foto";
-      } else if (o.payment_status === "paid") { text = "Pedido " + o.code + " confirmado."; go = "Acompanhar"; }
+      } else if (o.payment_status === "paid") { text = "Pedido confirmado"; go = "Acompanhar"; }
       if (!text) return;
       $("#resume-text").textContent = text;
       $("#resume-go").textContent = go + " →";
+      $("#resume-text").textContent = text.replace("🎉 ", "");
       if (o.payment_status === "pending" && o.pay_url) $("#resume-go").href = o.pay_url;
+      try { if (sessionStorage.getItem("pn_resume_x") === o.code) return; } catch (_) { /* modo privado */ }
       $("#resume").hidden = false;
+      document.body.classList.add("has-resume");
+      $("#resume-x").onclick = () => {
+        $("#resume").hidden = true;
+        document.body.classList.remove("has-resume");
+        try { sessionStorage.setItem("pn_resume_x", o.code); } catch (_) { /* modo privado */ }
+      };
     }).catch((err) => { if (err.status === 404) PN.clearToken(); });
   }
 
@@ -205,7 +223,7 @@
     btn.textContent = "Abrindo o pagamento…";
     // se o Mercado Pago demorar demais para abrir, libera o botão de novo
     const unlock = setTimeout(() => { btn.disabled = false; btn.innerHTML = btnLabel; }, 25000);
-    PN.track("InitiateCheckout", { value: (state.price + extras() * state.extraPrice) / 100, currency: "BRL" });
+    PN.track("InitiateCheckout", { value: (state.price + extrasSum(extras())) / 100, currency: "BRL" });
     try {
       const out = await PN.api("checkout", data);
       PN.setToken(out.token);

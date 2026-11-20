@@ -362,7 +362,9 @@
     f.pickup_address.value = pick.address || "";
     f.ntfy_topic.value = s.ntfy_topic || "";
     $("#ntfy-link").textContent = s.ntfy_topic ? "ntfy.sh/" + s.ntfy_topic : "(salve um tópico primeiro)";
-    f.extra_price.value = brl(s.extra_price_cents);
+    const ep = s.extra_prices_cents || [];
+    [0, 1, 2].forEach((i) => { f["extra_" + i].value = brl(ep[i]); });
+    kitPreview();
     f.extra_max.value = s.extra_max ?? 3;
     f.free_up_to.value = brl(s.free_shipping_up_to_cents);
     f.extra_credits.value = s.extra_credits || 3;
@@ -459,7 +461,7 @@
         filaments: f.filaments.value,
         pickup: { enabled: f.pickup_enabled.checked, name: f.pickup_name.value, address: f.pickup_address.value },
         ntfy_topic: f.ntfy_topic.value,
-        extra_price_cents: toCents(f.extra_price.value),
+        extra_prices_cents: [0, 1, 2].map((i) => toCents(f["extra_" + i].value)),
         extra_max: f.extra_max.value,
         free_shipping_up_to_cents: toCents(f.free_up_to.value),
         extra_credits: f.extra_credits.value,
@@ -518,4 +520,18 @@
   $("#settings").test_mode.addEventListener("change", syncWarn);
   new MutationObserver(syncWarn).observe($("#settings"), { subtree: true, attributes: true, attributeFilter: ["value"] });
   setInterval(syncWarn, 1500);
+
+  // Mostra como ficam os kits enquanto os preços são editados.
+  function kitPreview() {
+    const f = $("#settings");
+    const price = toCents(f.price.value);
+    let total = price;
+    const parts = ["1 por " + PN.money(price)];
+    [0, 1, 2].slice(0, Math.min(3, parseInt(f.extra_max.value, 10) || 0)).forEach((i) => {
+      total += toCents(f["extra_" + i].value);
+      parts.push(`${i + 2} por ${PN.money(total)} (${PN.money(Math.round(total / (i + 2)))} cada)`);
+    });
+    $("#kit-preview").textContent = "Kits: " + parts.join(" · ");
+  }
+  ["price", "extra_0", "extra_1", "extra_2", "extra_max"].forEach((n) => $("#settings")[n].addEventListener("input", kitPreview));
 })();
