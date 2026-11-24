@@ -1,9 +1,10 @@
 // Estúdio do cliente: foto → artes → escolha → endereço → acompanhamento.
 (function () {
   const $ = (s) => document.querySelector(s);
-  const views = ["loading", "login", "pending", "studio", "upsell", "extras", "address", "done"];
+  const views = ["loading", "login", "pending", "studio", "buy", "upsell", "extras", "address", "done"];
+  const params = new URLSearchParams(location.search);
   // Voltou do pagamento de um enfeite adicional (Mercado Pago → criar.html?…&mais=1)?
-  const fromUpsell = new URLSearchParams(location.search).has("mais");
+  const fromUpsell = params.has("mais");
 
   const state = {
     token: PN.getToken(),
@@ -23,7 +24,30 @@
     uploading: false,
     timer: null,
     barTimer: null,
+    // teste grátis
+    returnedPay: params.has("pago"),        // voltou do Mercado Pago
+    payFailed: params.get("pagamento") === "falhou",
+    fresh: params.has("novo"),               // "Testar grátis" / "Fazer outro pedido"
+    leadPrompted: false,
+    chooseLater: false,                      // pagar sem arte escolhida (cria mais artes depois)
+    buyQty: 0,
+    buyKind: "copia",
+    copyNames: [],
+    buyQuote: null,
   };
+  // Pedido ainda em teste grátis (não pago)?
+  const trialing = (o) => !!(o && o.trial && o.payment_status === "pending");
+
+  // Antes de começar o teste ainda não existe pedido: a tela usa este "rascunho".
+  function stubOrder() {
+    const c = PN.publicConfig || {};
+    const n = c.trial_credits || 2;
+    return {
+      stub: true, trial: true, lead: false, payment_status: "pending", code: "", is_test: !!c.test_mode,
+      credits_total: n, credits_left: n, generations: [], items: [], extras: 0, chosen_generation: null,
+      price_cents: c.price_cents || 3990, extra_prices: c.extra_prices || [], paid_credits: Math.max(0, (c.credits || 4) - n),
+    };
+  }
 
   function show(view) {
     views.forEach((v) => { $("#view-" + v).hidden = v !== view; });
@@ -105,14 +129,27 @@
   state.species = loadSpecies(0);
   state.speciesFor = 0;
 
+  async function startFresh() {
+    state.token = null;
+    await PN.ready;
+    state.order = stubOrder();
+    render();
+  }
+
   async function load() {
-    if (!state.token) return show("login");
+    if (!state.token) return startFresh();
     try {
       const out = await PN.api("order", { token: state.token });
+      // "Novo teste" com um pedido já concluído neste aparelho: começa outro.
+      if (state.fresh && (out.order.confirmed || out.order.payment_status === "refunded")) {
+        state.fresh = false;
+        return startFresh();
+      }
+      state.fresh = false;
       state.order = out.order;
       render();
     } catch (err) {
-      if (err.status === 404) { PN.clearToken(); state.token = null; return show("login"); }
+      if (err.status === 404) { PN.clearToken(); return startFresh(); }
       // Falha de rede: tenta de novo em instantes, sem assustar.
       clearTimeout(state.timer);
       state.timer = setTimeout(load, 4000);
@@ -130,7 +167,7 @@
   function updateSupport() {
     const o = state.order;
     if (!o) return;
-    const lines = ["Olá! Preciso de ajuda com o meu pedido " + o.code + "."];
+    const lines = [o.code ? "Olá! Preciso de ajuda com o meu pedido " + o.code + "." : "Olá! Preciso de ajuda com o teste do enfeite do meu pet."];
     const arts = o.generations.filter((g) => g.status === "done" && g.share_url);
     if (arts.length) {
       lines.push("", arts.length === 1 ? "Arte que eu criei:" : "Artes que eu criei:");
@@ -210,6 +247,20 @@
     updateSupport();
     $("#testbar").hidden = !o.is_test;
 
+    if (trialing(o)) {
+      // Voltou do Mercado Pago e o pagamento ainda não caiu: espera aqui.
+      if (state.returnedPay && o.pay_url) {
+        show("pending");
+        $("#pay-again").hidden = false;
+        $("#pay-again").href = o.pay_url;
+        $("#pending-back").hidden = false;
+        return schedule(4000);
+      }
+      if (state.payFailed) state.step = "buy";
+      if (state.step === "buy") return renderBuy();
+      return renderStudio();
+    }
+    $("#pending-back").hidden = true;
     if (o.payment_status === "pending") {
       show("pending");
       const pay = $("#pay-again");
@@ -253,6 +304,7 @@
     show("studio");
 
     const c = cur();
+    const tr = trialing(o);
     let autoChoose = null;   // escolhe a primeira arte sozinho, depois de terminar de desenhar a tela
     // Geração que estávamos acompanhando terminou?
     if (state.watching && !busy) {
@@ -265,12 +317,21 @@
       } else {
         state.mode = "idle";
         setError("#studio-error", "");
-        if (arts.length === 1 && !c.chosen_generation) autoChoose = arts[0].id;
+        if (tr && arts.length) autoChoose = arts[arts.length - 1].id;     // teste: mostra a arte nova
+        else if (arts.length === 1 && !c.chosen_generation) autoChoose = arts[0].id;
       }
       maybeShowTips();
     }
     if (busy) { state.mode = "working"; state.watching = busy.id; schedule(3000); startBar(); }
     else if (state.mode === "working" && !state.uploading) state.mode = "idle";
+    // Teste grátis: a arte pronta só aparece depois dos dados do cliente.
+    const hiddenDone = tr && !o.lead && o.generations.some((g) => g.status === "done" && !g.url);
+    if (hiddenDone && !busy && !state.uploading) {
+      state.mode = "locked";
+      stopBar();
+      setBar(100);
+    } else if (state.mode === "locked") state.mode = "idle";
+    if (tr && o.lead && arts.length && !c.chosen_generation && !busy && !autoChoose) autoChoose = arts[arts.length - 1].id;
 
     // patinhas = tentativas
     const paws = $("#paws");
@@ -283,17 +344,25 @@
     }
     const label = document.createElement("span");
     const used = c.credits_total - c.credits_left;
-    label.textContent = c.credits_left === 0 ? "Você já criou todas as artes"
+    label.textContent = tr ? (c.credits_left === 0 ? "Seus testes grátis acabaram"
+        : c.credits_left === 1 && used ? "Resta 1 arte grátis"
+        : `Você pode criar ${c.credits_left} ${c.credits_left === 1 ? "arte" : "artes"} grátis`)
+      : c.credits_left === 0 ? "Você já criou todas as artes"
       : c.credits_left === 1 ? "Resta 1 arte para criar"
       : (used ? "Restam " : "Você pode criar ") + c.credits_left + " artes";
     paws.appendChild(label);
 
-    $("#paid-banner").hidden = !(state.item === 0 && !o.generations.length);
+    $("#paid-banner").hidden = tr || !(state.item === 0 && !o.generations.length);
+    $("#trial-banner").hidden = !tr || o.generations.length > 0;
+    $("#studio-sub").hidden = !tr || o.generations.length > 0;
+    const prog = $("#studio-progress").children;
+    (tr ? ["1. Foto", "2. Sua arte", "3. Pedido"] : ["1. Foto", "2. Escolher", "3. Finalizar"]).forEach((t, i) => { prog[i].textContent = t; });
     $("#paid-code").textContent = o.code;
 
     const piece = state.item ? `Enfeite ${state.item + 1}: ` : "";
     $("#studio-title").textContent = piece + (arts.length ? "escolha a arte preferida" : state.item ? "envie a foto do outro pet" : "Envie a foto do seu pet");
-    if (!state.item) $("#studio-title").textContent = arts.length ? "Escolha a arte preferida" : "Envie a foto do seu pet";
+    if (!state.item) $("#studio-title").textContent = arts.length ? (tr ? "Assim fica o enfeite do seu pet 🎄" : "Escolha a arte preferida")
+      : state.mode === "locked" ? "Sua arte ficou pronta! 🎉" : tr ? "Teste grátis: envie a foto do seu pet" : "Envie a foto do seu pet";
     $("#back-extras").hidden = !state.item;
     $("#prog-2").classList.toggle("on", arts.length > 0);
 
@@ -320,13 +389,20 @@
 
     const noArts = arts.length === 0;
     const picking = state.mode === "pick" || (noArts && state.mode === "idle");
-    const previewing = state.mode === "preview" || state.mode === "working";
+    const previewing = state.mode === "preview" || state.mode === "working" || state.mode === "locked";
     $("#pick-block").hidden = !picking;
     $("#cancel-pick").hidden = noArts;
     $("#preview-block").hidden = !previewing;
     $("#working").hidden = state.mode !== "working";
     $("#preview-actions").hidden = state.mode !== "preview";
     $("#preview-img").src = state.photoUrl || "img/favicon.svg";
+    const waitingLead = tr && !o.lead && (state.mode === "working" || state.mode === "locked");
+    $("#locked-block").hidden = !waitingLead;
+    $("#locked-text").textContent = state.mode === "locked" ? "✨ Falta só preencher seus dados para ver a arte e o enfeite em 3D."
+      : "Enquanto desenhamos, preencha seus dados para ver o resultado assim que ficar pronto.";
+    $("#locked-go").textContent = state.mode === "locked" ? "✨ Ver a arte do meu pet" : "📝 Preencher meus dados";
+    if (state.mode === "locked" && !state.leadPrompted && !$("#lead").open) openLead();
+    if ($("#lead").open) updateLeadTop();
     $("#next-block").hidden = noArts || state.mode !== "idle";
 
     const picked = chosenArt();
@@ -347,17 +423,24 @@
 
     const go = $("#go-address");
     go.disabled = !c.chosen_generation;
-    go.textContent = c.chosen_generation ? "Continuar com esta arte →" : "Escolha uma arte acima";
+    go.textContent = !c.chosen_generation ? "Escolha uma arte acima"
+      : tr ? `🛒 Quero este enfeite · ${PN.money(o.price_cents)}` : "Continuar com esta arte →";
+    const kits = o.extra_prices || [];
+    $("#go-hint").hidden = !tr || !c.chosen_generation;
+    $("#go-hint").textContent = (kits.length ? `ou 2 por ${PN.money(o.price_cents + kits[0])} · ` : "") + "🚚 frete grátis para quase todo o Brasil";
 
     $("#again-block").hidden = false;
     $("#again-same").hidden = c.credits_left === 0 || !state.photo;
     $("#again-other").hidden = c.credits_left === 0;
-    $("#again-text").textContent = c.credits_left === 0
-      ? "Você já criou todas as suas artes. Escolha a preferida para continuar."
-      : "Quer ver outra opção?";
-    $("#none-liked").hidden = c.credits_left !== 0;
+    $("#again-same").textContent = tr ? "🔁 Outra versão grátis, mesma foto" : "🔁 Nova arte, mesma foto";
+    $("#again-text").textContent = tr
+      ? (c.credits_left === 0 ? "Seus testes grátis acabaram." : `Quer ver outra versão? ${c.credits_left === 1 ? "Resta 1 grátis" : "Restam " + c.credits_left + " grátis"}.`)
+      : c.credits_left === 0 ? "Você já criou todas as suas artes. Escolha a preferida para continuar." : "Quer ver outra opção?";
+    const againBuy = $("#again-buy");
+    againBuy.hidden = !(tr && c.credits_left === 0 && o.paid_credits > 0);
+    againBuy.textContent = `Não curtiu? Peça e crie mais ${o.paid_credits} artes depois de pagar`;
+    $("#none-liked").hidden = tr || c.credits_left !== 0;
     if (autoChoose) choose(autoChoose);
-    maybeWelcome();
   }
 
   // Enfeites adicionais: para cada um, "outro pet" (cria a arte) ou "mais um igual".
@@ -434,6 +517,7 @@
   // (uma vez só) → endereço.
   const upKey = () => "pn_up_" + state.order.code;
   function offerUpsell() {
+    if (state.order.trial) return false;      // no teste grátis os kits são oferecidos antes de pagar
     const u = state.order.upsell;
     if (!u || !(u.max > 0) || !(u.price_cents > 0)) return false;
     try { return !localStorage.getItem(upKey()); } catch (_) { return true; }
@@ -677,6 +761,7 @@
   }
   function openTips(note) {
     onb.querySelectorAll("[data-onb-credits]").forEach((el) => { el.textContent = state.order ? cur().credits_total : 4; });
+    onb.querySelectorAll("[data-onb-free]").forEach((el) => { el.hidden = !trialing(state.order); });
     const msg = typeof note === "string" ? note : "";
     $("#onb-note").textContent = msg;
     $("#onb-note").hidden = !msg;
@@ -817,9 +902,11 @@
   async function create() {
     if (!state.photo || state.mode === "working") return;
     if (!state.species) { setError("#studio-error", "Toque no tipo do seu pet: gato, cachorro, ave ou roedor."); return; }
-    if (cur().credits_left === 1) {
-      const go = await ask({ ico: "✨", img: state.photoUrl, title: "Esta é a sua última arte",
-        text: "Depois dela não dá para criar outra. Confira se esta é a foto certa.", ok: "Criar a última arte", cancel: "Trocar a foto" });
+    const tr = trialing(state.order);
+    if (cur().credits_left === 1 && cur().credits_total > 1) {
+      const go = await ask({ ico: "✨", img: state.photoUrl, title: tr ? "Esta é a sua última arte grátis" : "Esta é a sua última arte",
+        text: tr ? "Depois dela, para criar mais é só fazer o pedido. Confira se esta é a foto certa." : "Depois dela não dá para criar outra. Confira se esta é a foto certa.",
+        ok: "Criar a última arte", cancel: "Trocar a foto" });
       if (!go) { state.mode = "pick"; renderStudio(); return; }
     }
     setError("#studio-error", "");
@@ -828,27 +915,43 @@
     renderStudio();
     startBar(true);
     try {
+      if (!state.token) {
+        // Primeiro teste: o pedido nasce agora (ainda sem dados do cliente).
+        const t = await PN.api("trial-start", { site_url: location.href.split(/[?#]/)[0] });
+        state.token = t.token;
+        PN.setToken(t.token);
+        try { localStorage.setItem(speciesKey(0), state.species); } catch (_) { /* modo privado */ }
+        PN.track("StartTrial");
+      }
       const out = await PN.upload(state.token, state.photo, state.species, state.item);
       state.watching = out.generation_id;
       state.uploading = false;
       schedule(2500);
+      if (tr && !state.order.lead) openLead();
     } catch (err) {
       state.uploading = false;
       stopBar();
       state.mode = "preview";
-      await load().catch(() => {});
+      if (state.token) await load().catch(() => {});
+      else renderStudio();
       setError("#studio-error", err.message);
     }
   }
 
+  // Barra de progresso (na foto e na janela de dados do teste grátis).
+  function setBar(pct) {
+    $("#bar").style.width = pct + "%";
+    $("#lead-bar").style.width = pct + "%";
+    $("#lead-pct").textContent = Math.round(pct) + "%";
+  }
   function startBar(reset) {
     const bar = $("#bar");
-    if (reset) { stopBar(); bar.style.width = "4%"; }
+    if (reset) { stopBar(); setBar(4); }
     if (state.barTimer) return;
     let pct = parseFloat(bar.style.width) || 4;
     state.barTimer = setInterval(() => {
       pct = Math.min(94, pct + (pct < 60 ? 1.4 : pct < 85 ? 0.6 : 0.15));
-      bar.style.width = pct + "%";
+      setBar(pct);
     }, 1000);
   }
 
@@ -894,6 +997,7 @@
   $("#again-same").addEventListener("click", create);
   $("#again-other").addEventListener("click", () => { state.mode = "pick"; renderStudio(); $("#pick-block").scrollIntoView({ behavior: "smooth", block: "center" }); });
   $("#go-address").addEventListener("click", async () => {
+    if (trialing(state.order)) { state.chooseLater = false; state.step = "buy"; render(); window.scrollTo(0, 0); return; }
     const art = chosenArt();
     const go = await ask({ img: art && art.url, title: "Seguir com esta arte?",
       text: "Você ainda pode voltar e trocar até finalizar o pedido.", ok: "Sim, seguir →", cancel: "Ver as artes de novo" });
@@ -1030,8 +1134,10 @@
   function stepBack() {
     if ($("#ask").open) { $("#ask-cancel").click(); return true; }
     if ($("#onb").open) { $("#onb").close(); return true; }
+    if ($("#lead").open) { $("#lead").close(); return true; }
     const o = state.order;
-    if (!o || !o.payment_status || o.payment_status !== "paid" || (o.confirmed && state.step !== "address")) return false;
+    if (trialing(o) && state.step === "buy") { state.step = "studio"; render(); return true; }
+    if (!o || !o.payment_status || !(o.payment_status === "paid" || trialing(o)) || (o.confirmed && state.step !== "address")) return false;
     if (state.step === "address") { state.step = itemsOf(o).length ? "extras" : "studio"; state.item = 0; render(); return true; }
     if (state.step === "upsell") { state.upsellReturn = false; state.step = "studio"; render(); return true; }
     if (state.step === "extras") { state.step = "studio"; state.item = 0; render(); return true; }
@@ -1048,11 +1154,12 @@
     if (leaving) return;
     if (stepBack()) { history.pushState({ pn: "guard" }, "", location.pathname); window.scrollTo(0, 0); return; }
     const o = state.order;
-    const unfinished = o && o.payment_status === "paid" && !o.confirmed;
+    const tr = trialing(o) && o.generations && o.generations.length > 0;
+    const unfinished = (o && o.payment_status === "paid" && !o.confirmed) || tr;
     if (!unfinished) { leaving = true; history.back(); return; }
     history.pushState({ pn: "guard" }, "", location.pathname);
-    const out = await ask({ ico: "👋", title: "Sair da criação?",
-      text: "Seu pedido fica salvo. Para continuar depois, volte ao site e toque em “Meu pedido”.", ok: "Ficar aqui", cancel: "Sair" });
+    const out = await ask({ ico: "👋", title: tr ? "Sair do teste?" : "Sair da criação?",
+      text: tr ? "Sua arte fica salva neste aparelho e no seu e-mail. Para voltar, é só abrir o site de novo." : "Seu pedido fica salvo. Para continuar depois, volte ao site e toque em “Meu pedido”.", ok: "Ficar aqui", cancel: "Sair" });
     if (!out) { leaving = true; history.go(-2); }
   });
   // Fechar a aba no meio da criação: o navegador pergunta antes.
@@ -1061,7 +1168,7 @@
   });
 
   // Tira o token da barra de endereço (ele já está salvo no aparelho).
-  if (new URLSearchParams(location.search).has("t")) history.replaceState(history.state, "", location.pathname);
+  if (["t", "pago", "pagamento", "novo", "mais"].some((k) => params.has(k))) history.replaceState(history.state, "", location.pathname);
 
   load();
 })();

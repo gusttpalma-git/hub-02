@@ -39,7 +39,7 @@
         <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" required></label>
         <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required></label>
         <button class="btn green block" type="submit">Entrar</button>
-        <p class="center" style="margin:18px 0 0">Ainda não comprou? <a href="index.html#comprar">Peça o seu aqui</a></p>
+        <p class="center" style="margin:18px 0 0">Ainda não fez o seu? <a href="criar.html?novo=1">Faça o teste grátis</a></p>
       </form>
     </section>
 
@@ -50,17 +50,20 @@
         <h2 style="margin-top:18px">Aguardando o pagamento</h2>
         <p class="muted">Assim que o pagamento for confirmado, esta página libera sozinha. Com Pix leva poucos segundos.</p>
         <a class="btn green block" id="pay-again" hidden>Ainda não paguei · pagar agora</a>
+        <p style="margin:12px 0 0"><button class="linklike" type="button" id="pending-back" hidden>← Voltar e revisar o pedido</button></p>
         <p class="small muted" style="margin:14px 0 0">Já pagou e nada mudou em alguns minutos? <a data-support hidden target="_blank" rel="noopener">Fale com a gente</a>.</p>
       </div>
     </section>
 
     <!-- passo 1 e 2: foto e artes -->
     <section id="view-studio" hidden>
-      <ol class="progress"><li class="on">1. Foto</li><li id="prog-2">2. Escolher</li><li>3. Finalizar</li></ol>
+      <ol class="progress" id="studio-progress"><li class="on">1. Foto</li><li id="prog-2">2. Escolher</li><li>3. Finalizar</li></ol>
       <div class="card">
+        <p class="trial-banner" id="trial-banner" hidden>🎁 <b>Teste grátis</b> · veja como fica antes de pagar</p>
         <p class="paid-banner" id="paid-banner" hidden>✓ Pagamento confirmado · pedido <span id="paid-code"></span>
           <small>Faça com calma: se sair, é só voltar ao site e tocar em “Meu pedido” ou “Já comprei”.</small></p>
         <h2 class="center" id="studio-title">Envie a foto do seu pet</h2>
+        <p class="center muted studio-sub" id="studio-sub" hidden>Em cerca de 1 minuto você vê a arte e o enfeite em 3D. Só paga se gostar.</p>
         <p class="paws" id="paws" aria-live="polite"></p>
         <p class="center" style="margin:-8px 0 14px"><button class="linklike" type="button" id="back-extras" hidden>← Voltar para os enfeites</button></p>
         <div class="alert error" id="studio-error" hidden role="alert"></div>
@@ -88,7 +91,12 @@
             <small>da galeria ou da câmera</small>
             <input type="file" id="file" accept="image/*" hidden>
           </label>
-          <p class="center" style="margin:14px 0 0"><button class="linklike" type="button" id="open-tips">📸 Como deve ser a foto?</button></p>
+          <div class="tips-row" aria-label="Como deve ser a foto">
+            <figure class="good"><img src="img/foto-boa.jpg" alt=""><figcaption>✓ De frente, com luz</figcaption></figure>
+            <figure class="bad"><img src="img/foto-ruim-costas.jpg" alt=""><figcaption>✕ De costas</figcaption></figure>
+            <figure class="bad"><img src="img/foto-ruim-escura.jpg" alt=""><figcaption>✕ Escura ou longe</figcaption></figure>
+          </div>
+          <p class="center" style="margin:10px 0 0"><button class="linklike" type="button" id="open-tips">📸 Mais dicas de foto</button></p>
           <p class="center" style="margin:4px 0 0"><button class="linklike" type="button" id="cancel-pick" hidden>← Voltar para as artes</button></p>
         </div>
 
@@ -102,6 +110,10 @@
               <div class="bar"><i id="bar"></i></div>
               <small style="font:600 1rem var(--font-body)">Leva cerca de 1 minuto. Se sair, a arte continua sendo feita e aparece quando você voltar.</small>
             </div>
+          </div>
+          <div class="locked" id="locked-block" hidden>
+            <p id="locked-text"></p>
+            <button class="btn green block" type="button" id="locked-go">📝 Preencher meus dados</button>
           </div>
           <div id="preview-actions" class="again">
             <button class="btn block" id="create" type="button">✨ Criar minha arte</button>
@@ -119,10 +131,12 @@
               <input id="pet-name" maxlength="16" placeholder="Ex.: Mel" autocomplete="off"></label>
           </div>
           <button class="btn green block" id="go-address" type="button" disabled>Escolha uma arte acima</button>
+          <p class="center small go-hint" id="go-hint" hidden></p>
           <div class="again" id="again-block">
             <p class="center muted" style="margin:20px 0 0" id="again-text"></p>
             <button class="btn block sm again-same" id="again-same" type="button">🔁 Nova arte, mesma foto</button>
             <button class="btn block sm again-other" id="again-other" type="button">📷 Usar outra foto</button>
+            <button class="btn ghost block sm" id="again-buy" type="button" hidden></button>
           </div>
           <p class="center none-liked" id="none-liked" hidden>Não gostou de nenhuma? <a data-support hidden target="_blank" rel="noopener">Fale com a gente no WhatsApp</a> antes de finalizar.</p>
           <p class="center" style="margin:18px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">💬 Preciso de ajuda com as artes (WhatsApp)</a></p>
@@ -189,6 +203,61 @@
       </div>
     </section>
 
+    <!-- teste grátis: fechar o pedido e pagar -->
+    <section id="view-buy" hidden>
+      <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Sua arte</li><li class="on">3. Pedido</li></ol>
+      <div class="card">
+        <h2 class="center">Seu pedido 🎄</h2>
+        <div class="alert error" id="buy-error" hidden role="alert"></div>
+        <div class="buy-art">
+          <div class="mockup sm"><img id="buy-art" alt="Arte do seu enfeite"></div>
+          <div>
+            <b id="buy-art-title">Enfeite com a arte escolhida</b>
+            <small id="buy-art-sub"></small>
+            <button class="linklike" type="button" id="buy-change">Trocar a arte</button>
+          </div>
+        </div>
+        <fieldset class="qty" id="buy-qty" hidden>
+          <legend>Quantos enfeites?</legend>
+          <div class="qty-grid"></div>
+        </fieldset>
+        <div id="buy-kind" hidden>
+          <p class="buy-label">Os outros enfeites são:</p>
+          <div class="up-options">
+            <button type="button" class="up-option" data-buy-kind="copia">
+              <span class="up-ico" aria-hidden="true">🎁</span>
+              <span class="up-text"><b>Iguais a este</b><small>Para presentear, com outro nome no verso</small></span>
+              <span class="up-check" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="up-option" data-buy-kind="novo">
+              <span class="up-ico" aria-hidden="true">🐾</span>
+              <span class="up-text"><b>De outros pets</b><small>Você envia as fotos logo depois do pagamento</small></span>
+              <span class="up-check" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+        <div id="buy-names"></div>
+        <div class="buy-ship">
+          <div><b id="buy-ship-title">Entrega</b><span id="buy-addr"></span></div>
+          <button class="linklike" type="button" id="buy-edit">Alterar</button>
+        </div>
+        <div class="totals" id="buy-totals">
+          <div><span id="buy-row-items">Enfeite personalizado</span><span id="buy-items"></span></div>
+          <div id="buy-row-ship"><span>Frete <small class="muted" id="buy-ship-label"></small></span><span id="buy-ship"></span></div>
+          <div class="total"><span>Total</span><span id="buy-total"></span></div>
+        </div>
+        <details class="buy-notes"><summary>Observações para a gente <small>(opcional)</small></summary>
+          <textarea id="buy-notes-text" rows="3" maxlength="500" placeholder="Ex.: o nome tem acento"></textarea></details>
+        <button class="btn block" type="button" id="pay-btn">Pagar</button>
+        <div class="secure-box">
+          <p><b>🔒 Pagamento seguro pelo Mercado Pago</b> · Pix ou cartão em até 3x. Seus dados de pagamento não passam pela gente.</p>
+          <p id="buy-after"></p>
+        </div>
+        <p class="consent">Produto personalizado. Ao pagar, você concorda com as <a href="politicas.html" target="_blank">condições de compra e privacidade</a>.</p>
+        <p class="center" style="margin:10px 0 0"><button class="linklike" type="button" id="buy-back">← Voltar para a arte</button></p>
+      </div>
+    </section>
+
     <!-- passo 3: endereço -->
     <section id="view-address" hidden>
       <ol class="progress"><li class="on">1. Foto</li><li class="on">2. Escolher</li><li class="on">3. Finalizar</li></ol>
@@ -248,7 +317,7 @@
         <p class="small muted" style="margin:18px 0 0">Para acompanhar depois, volte ao site e toque em “Meu pedido” (ou “Já comprei”, em outro aparelho).</p>
         <div class="another">
           <p>🎁 Quer fazer um enfeite para outra pessoa?</p>
-          <a class="btn ghost block sm" id="new-order" href="index.html#comprar">Fazer outro pedido</a>
+          <a class="btn ghost block sm" id="new-order" href="criar.html?novo=1">Fazer outro pedido</a>
         </div>
       </div>
     </section>
@@ -276,6 +345,50 @@
       <p class="small muted" id="wa-count" style="margin:12px 0 0" aria-live="polite"></p>
       <p style="margin:6px 0 0"><button class="linklike" type="button" id="wa-later">Agora não</button></p>
     </div>
+  </dialog>
+
+  <!-- teste grátis: dados do cliente enquanto a arte é desenhada -->
+  <dialog id="lead" class="lead" aria-labelledby="lead-title">
+    <form id="lead-form" novalidate>
+      <button class="close" type="button" aria-label="Fechar" id="lead-x">×</button>
+      <div class="lead-top" id="lead-top">
+        <p class="lead-status" id="lead-status">✏️ Desenhando o seu pet… <b id="lead-pct"></b></p>
+        <div class="bar"><i id="lead-bar"></i></div>
+      </div>
+      <h3 id="lead-title">Enquanto isso, seus dados</h3>
+      <p class="muted small" id="lead-sub">É para mostrar a arte e já deixar a entrega pronta. <b>Você não paga nada agora.</b></p>
+      <div class="alert error" id="lead-error" hidden role="alert"></div>
+      <label class="field"><span>Seu nome</span><input name="name" autocomplete="name" required maxlength="120" placeholder="Maria da Silva"></label>
+      <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
+      <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="maria@email.com"></label>
+      <fieldset class="delivery" id="lead-delivery" hidden>
+        <legend>Como você quer receber?</legend>
+        <label class="choice"><input type="radio" name="delivery" value="correios" checked>
+          <span><b>📦 Receber em casa</b><small id="lead-ship-label">Frete grátis para quase todo o Brasil</small></span></label>
+        <label class="choice"><input type="radio" name="delivery" value="retirada">
+          <span><b>🏠 Retirar em Cosmópolis</b><small id="lead-pickup-label">Sem frete</small></span></label>
+      </fieldset>
+      <div id="lead-addr">
+        <label class="field"><span>CEP</span><input name="cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000"></label>
+        <p class="small muted" id="lead-cep-status" style="margin:-10px 0 14px" aria-live="polite"></p>
+        <label class="field"><span>Rua</span><input name="street" autocomplete="address-line1" maxlength="160"></label>
+        <div class="row-num">
+          <label class="field"><span>Número</span><input name="number" inputmode="numeric" maxlength="20"></label>
+          <label class="field"><span>Complemento <small>(opcional)</small></span><input name="complement" maxlength="80" placeholder="Apto, bloco…"></label>
+        </div>
+        <label class="field"><span>Bairro</span><input name="district" maxlength="100"></label>
+        <div class="row2">
+          <label class="field"><span>Cidade</span><input name="city" maxlength="100"></label>
+          <label class="field"><span>Estado</span>
+            <select name="state">
+              <option value="">UF</option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option>
+            </select></label>
+        </div>
+      </div>
+      <button class="btn green block" type="submit" id="lead-btn">Ver a arte do meu pet ✨</button>
+      <p class="small muted center" style="margin:10px 0 0">🔒 Seus dados ficam só com a gente, para o pedido e a entrega.</p>
+    </form>
   </dialog>
 
   <!-- boas-vindas: como deve ser a foto (aparece ao entrar e em "Ver dicas") -->
