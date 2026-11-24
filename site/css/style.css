@@ -739,3 +739,56 @@ body.has-resume footer { padding-bottom: 90px; }
 .perks-grid { padding: 0; margin-inline: auto; }
 .hero-offer { padding-top: 18px; }
 @media (min-width: 760px) { .hero-offer { padding-top: 26px; } }
+
+/* ── teste grátis ── */
+.trial-banner { margin: 0 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--gold-soft); color: #6a4b0b; font-weight: 800; text-align: center; }
+.studio-sub { margin: -6px auto 16px; max-width: 34ch; }
+.tips-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 0; }
+.tips-row figure { margin: 0; text-align: center; }
+.tips-row img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; border: 3px solid var(--pine); display: block; }
+.tips-row .bad img { border-color: #c8202f; filter: saturate(.7); }
+.tips-row figcaption { margin-top: 4px; font: 800 .8rem/1.2 var(--font-body); color: var(--pine-deep); }
+.tips-row .bad figcaption { color: #a3202b; }
+.locked { margin: 14px 0 0; padding: 16px; border-radius: 16px; background: var(--gold-soft); text-align: center; }
+.locked p { margin: 0 0 12px; font-weight: 800; color: #6a4b0b; }
+.go-hint { margin: 8px 0 0; color: var(--muted); font-weight: 700; }
+dialog.lead { width: min(460px, calc(100% - 20px)); }
+dialog.lead form { padding: 22px 20px 20px; position: relative; }
+dialog.lead h3 { margin: 4px 0 4px; padding-right: 36px; }
+dialog.lead .lead-sub, dialog.lead #lead-sub { margin: 0 0 14px; }
+.lead-top { margin: 0 40px 14px 0; padding: 10px 12px; border-radius: 14px; background: var(--pine-soft); }
+.lead-status { margin: 0 0 8px; font-weight: 800; color: var(--pine-deep); font-size: .95rem; }
+.lead-top .bar { height: 8px; background: #fff; border-radius: 99px; overflow: hidden; }
+.buy-art { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center; margin: 0 0 18px; }
+.buy-art .mockup.sm { width: 96px; }
+.buy-art b { display: block; font-size: 1.05rem; }
+.buy-art small { display: block; color: var(--muted); font-weight: 700; margin: 2px 0 4px; }
+.buy-label { margin: 0 0 8px; font-weight: 800; }
+.buy-ship { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin: 0 0 14px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 14px; }
+.buy-ship b { display: block; }
+.buy-ship span { color: var(--muted); font-weight: 600; font-size: .95rem; }
+.buy-notes { margin: 0 0 16px; }
+.buy-notes summary { cursor: pointer; font-weight: 800; color: var(--pine-deep); }
+.buy-notes textarea { width: 100%; margin-top: 8px; }
+#view-buy .qty { margin-bottom: 14px; }
+.buy-notes textarea { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; font: inherit; min-height: 80px; }
+
+/* ── página inicial: teste grátis ── */
+.try-cta { width: 100%; font-size: 1.2rem; padding-block: 20px; }
+.try-note { margin: 10px 0 18px; text-align: center; font-weight: 800; color: var(--pine); font-size: .95rem; }
+.mini-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 18px; padding: 0; }
+.mini-steps li { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 12px 6px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.mini-steps span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--pine); color: #fff; font-weight: 800; margin-bottom: 4px; }
+.mini-steps b { font-size: .92rem; line-height: 1.2; color: var(--pine-deep); }
+.mini-steps small { font-size: .78rem; color: var(--muted); font-weight: 700; }
+.offer.slim { justify-content: center; margin-bottom: 0; }
+.offer.slim .price strong { font-size: 1.9rem; }
+.price-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; max-width: 760px; margin: 0 auto; }
+.price-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px 10px 16px; border-radius: 18px; background: var(--surface); border: 2px solid var(--line); text-align: center; }
+.price-card.best { border-color: var(--pine); background: var(--pine-soft); }
+.price-card i { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 3px 10px; border-radius: 99px; background: var(--pine); color: #fff; font: 800 .75rem var(--font-body); font-style: normal; }
+.price-card b { font-size: 1.05rem; }
+.price-card strong { font: 600 1.7rem/1.1 var(--font-title); color: var(--pine-deep); }
+.price-card small { color: var(--muted); font-weight: 700; }
+#precos .deadlines { max-width: 520px; margin: 28px auto 0; }
+@media (max-width: 380px) { .mini-steps b { font-size: .82rem; } .try-cta { font-size: 1.05rem; } }

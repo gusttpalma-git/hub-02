@@ -353,7 +353,8 @@
     paws.appendChild(label);
 
     $("#paid-banner").hidden = tr || !(state.item === 0 && !o.generations.length);
-    $("#trial-banner").hidden = !tr || o.generations.length > 0;
+    $("#trial-banner").hidden = true;
+    paws.hidden = tr && !o.generations.length;      // no começo do teste o subtítulo já explica
     $("#studio-sub").hidden = !tr || o.generations.length > 0;
     const prog = $("#studio-progress").children;
     (tr ? ["1. Foto", "2. Sua arte", "3. Pedido"] : ["1. Foto", "2. Escolher", "3. Finalizar"]).forEach((t, i) => { prog[i].textContent = t; });
@@ -362,7 +363,8 @@
     const piece = state.item ? `Enfeite ${state.item + 1}: ` : "";
     $("#studio-title").textContent = piece + (arts.length ? "escolha a arte preferida" : state.item ? "envie a foto do outro pet" : "Envie a foto do seu pet");
     if (!state.item) $("#studio-title").textContent = arts.length ? (tr ? "Assim fica o enfeite do seu pet 🎄" : "Escolha a arte preferida")
-      : state.mode === "locked" ? "Sua arte ficou pronta! 🎉" : tr ? "Teste grátis: envie a foto do seu pet" : "Envie a foto do seu pet";
+      : state.mode === "locked" ? "Sua arte ficou pronta! 🎉" : state.mode === "working" ? "Desenhando o seu pet ✏️"
+      : tr ? "Teste grátis: envie a foto do seu pet" : "Envie a foto do seu pet";
     $("#back-extras").hidden = !state.item;
     $("#prog-2").classList.toggle("on", arts.length > 0);
 
@@ -681,6 +683,7 @@
   function renderDone() {
     const o = state.order;
     show("done");
+    if (o.trial) PN.ready.then(offerWhatsApp);   // pago pelo teste grátis: convida a mandar o resumo (uma vez)
     const art = chosenArt();
     if (art) $("#done-art").src = art.url;
     $("#done-code").textContent = o.code;
@@ -1107,6 +1110,293 @@
       btn.disabled = false;
       btn.textContent = label;
     }
+  });
+
+  // ───────── teste grátis: dados do cliente (enquanto a arte é desenhada) ─────────
+
+  const leadDlg = $("#lead");
+  const ld = $("#lead-form");
+  const leadPickup = () => (ld.querySelector("input[name=delivery]:checked") || {}).value === "retirada";
+
+  function openLead() {
+    state.leadPrompted = true;
+    const o = state.order || {};
+    const ct = o.contact || {};
+    const a = o.address || {};
+    if (!ld.dataset.filled) {
+      ld.dataset.filled = "1";
+      ld.name.value = ct.name || "";
+      ld.whatsapp.value = ct.whatsapp ? PN.maskPhone(ct.whatsapp) : "";
+      ld.email.value = ct.email || "";
+      ld.cep.value = a.cep ? PN.maskCep(a.cep) : "";
+      ld.street.value = a.street || "";
+      ld.number.value = a.number || "";
+      ld.complement.value = a.complement || "";
+      ld.district.value = a.district || "";
+      ld.city.value = a.city || "";
+      ld.state.value = a.state || "";
+      const pick = ld.querySelector(`input[name=delivery][value=${o.delivery_method === "retirada" ? "retirada" : "correios"}]`);
+      if (pick) pick.checked = true;
+    }
+    const c = PN.publicConfig || {};
+    $("#lead-delivery").hidden = !c.pickup;
+    if (c.pickup) {
+      $("#lead-pickup-label").replaceChildren(document.createTextNode("Sem frete · " + c.pickup.name), document.createElement("br"), document.createTextNode(c.pickup.address));
+    }
+    $("#lead-ship-label").textContent = c.shipping_mode === "incluso" ? "Frete grátis para todo o Brasil" : "Frete grátis para quase todo o Brasil";
+    $("#lead-addr").hidden = leadPickup();
+    setError("#lead-error", "");
+    updateLeadTop();
+    if (!leadDlg.open) leadDlg.showModal();
+  }
+
+  function updateLeadTop() {
+    const o = state.order || {};
+    const editing = !!o.lead;
+    $("#lead-top").hidden = editing;
+    $("#lead-title").textContent = editing ? "Seus dados de entrega" : "Enquanto isso, seus dados";
+    $("#lead-sub").hidden = editing;
+    $("#lead-btn").textContent = editing ? "Salvar" : "Ver a arte do meu pet ✨";
+    if (editing) return;
+    const busy = state.uploading || (o.generations || []).some((g) => g.status === "processing");
+    const status = $("#lead-status");
+    if (busy) {
+      status.firstChild.textContent = "✏️ Desenhando o seu pet… ";
+      $("#lead-pct").hidden = false;
+    } else if (state.mode === "locked") {
+      status.firstChild.textContent = "✨ Sua arte ficou pronta! Termine aqui para ver. ";
+      $("#lead-pct").hidden = true;
+      setBar(100);
+    }
+  }
+
+  $("#lead-x").addEventListener("click", () => leadDlg.close());
+  $("#locked-go").addEventListener("click", openLead);
+  ld.whatsapp.addEventListener("input", (e) => { e.target.value = PN.maskPhone(e.target.value); });
+  ld.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => { $("#lead-addr").hidden = leadPickup(); }));
+  ld.cep.addEventListener("input", async (e) => {
+    e.target.value = PN.maskCep(e.target.value);
+    const cep = e.target.value.replace(/\D/g, "");
+    const st = $("#lead-cep-status");
+    if (cep.length !== 8) { st.textContent = ""; return; }
+    st.textContent = "Buscando endereço…";
+    try {
+      const d = await (await fetch("https://viacep.com.br/ws/" + cep + "/json/")).json();
+      if (d.erro) throw new Error();
+      if (d.logradouro) ld.street.value = d.logradouro;
+      if (d.bairro) ld.district.value = d.bairro;
+      if (d.localidade) ld.city.value = d.localidade;
+      if (d.uf) ld.state.value = d.uf;
+      st.textContent = "Endereço encontrado ✓ Falta só o número.";
+      (ld.street.value ? ld.number : ld.street).focus();
+    } catch (_) {
+      st.textContent = "Não achamos esse CEP. Preencha o endereço abaixo.";
+    }
+  });
+
+  ld.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setError("#lead-error", "");
+    const pickup = leadPickup();
+    const err = (msg, el) => { setError("#lead-error", msg); if (el) el.focus(); };
+    if (ld.name.value.trim().length < 3) return err("Digite seu nome.", ld.name);
+    if (ld.whatsapp.value.replace(/\D/g, "").length < 10) return err("Confira seu WhatsApp com DDD.", ld.whatsapp);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(ld.email.value.trim())) return err("Confira seu e-mail.", ld.email);
+    if (!pickup) {
+      if (ld.cep.value.replace(/\D/g, "").length !== 8) return err("Digite o CEP de entrega.", ld.cep);
+      if (!ld.street.value.trim()) return err("Digite o nome da rua.", ld.street);
+      if (!ld.number.value.trim()) return err("Digite o número (ou S/N).", ld.number);
+      if (!ld.district.value.trim()) return err("Digite o bairro.", ld.district);
+      if (!ld.city.value.trim()) return err("Digite a cidade.", ld.city);
+      if (!ld.state.value) return err("Escolha o estado.", ld.state);
+    }
+    const btn = $("#lead-btn");
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Salvando…";
+    const firstTime = !state.order.lead;
+    try {
+      const out = await PN.api("lead", {
+        token: state.token, name: ld.name.value, whatsapp: ld.whatsapp.value, email: ld.email.value,
+        delivery: pickup ? "retirada" : "correios", cep: ld.cep.value, street: ld.street.value, number: ld.number.value,
+        complement: ld.complement.value, district: ld.district.value, city: ld.city.value, state: ld.state.value,
+      });
+      state.order = out.order;
+      state.buyQuote = null;
+      leadDlg.close();
+      if (firstTime) PN.track("Lead");
+      render();
+      if (state.step === "studio") window.scrollTo(0, 0);
+    } catch (e2) {
+      setError("#lead-error", e2.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+
+  // ───────── teste grátis: fechar o pedido ─────────
+
+  const kitSum = (n) => (state.order.extra_prices || []).slice(0, n).reduce((a, b) => a + b, 0);
+
+  function renderBuy() {
+    const o = state.order;
+    show("buy");
+    const art = state.chooseLater ? null : genById(o.chosen_generation);
+    if (!art && !state.chooseLater) { state.step = "studio"; return renderStudio(); }
+    if (!o.lead) { state.step = "studio"; renderStudio(); return openLead(); }
+    if (state.payFailed) { state.payFailed = false; setError("#buy-error", "O pagamento não foi concluído. Confira e tente de novo."); }
+    const last = o.generations.filter((g) => g.status === "done" && g.url).pop();
+    $("#buy-art").src = art ? art.url : last ? last.url : "img/exemplo-4-arte.png";
+    $("#buy-art-title").textContent = art ? "Enfeite com a arte escolhida" : "Você escolhe a arte depois de pagar";
+    $("#buy-art-sub").textContent = art ? (nameOf(0).trim() ? `Nome no verso: ${nameOf(0).trim()}` : "Sem nome no verso")
+      : `Depois do pagamento, você cria mais ${o.paid_credits} artes e escolhe a preferida.`;
+    $("#buy-change").textContent = art ? "Trocar a arte ou o nome" : "Voltar para as artes";
+
+    // quantidade (kits)
+    const prices = o.extra_prices || [];
+    state.buyQty = Math.min(state.buyQty, prices.length);
+    $("#buy-qty").hidden = !prices.length;
+    $("#buy-qty .qty-grid").replaceChildren(...Array.from({ length: prices.length + 1 }, (_, n) => {
+      const label = document.createElement("label");
+      label.className = "qty-opt";
+      const input = document.createElement("input");
+      input.type = "radio"; input.name = "buy-qty"; input.value = String(n); input.checked = n === state.buyQty;
+      input.addEventListener("change", () => { state.buyQty = n; renderBuy(); });
+      const box = document.createElement("span");
+      if (n === 1) { const tag = document.createElement("i"); tag.className = "qty-tag"; tag.textContent = "💚 melhor custo"; box.appendChild(tag); }
+      const b = document.createElement("b"); b.textContent = (n + 1) + (n ? " enfeites" : " enfeite");
+      const st = document.createElement("strong"); st.textContent = PN.money(o.price_cents + kitSum(n));
+      box.append(b, st);
+      if (n) { const sm = document.createElement("small"); sm.textContent = PN.money(Math.round((o.price_cents + kitSum(n)) / (n + 1))) + " cada"; box.appendChild(sm); }
+      label.append(input, box);
+      return label;
+    }));
+    const ex = state.buyQty;
+    $("#buy-kind").hidden = !ex;
+    document.querySelectorAll("[data-buy-kind]").forEach((b) => b.classList.toggle("on", b.dataset.buyKind === state.buyKind));
+
+    // nomes no verso (o do 1º e o de cada cópia)
+    const names = $("#buy-names");
+    const fields = [];
+    const field = (text, value, onInput) => {
+      const label = document.createElement("label");
+      label.className = "field";
+      const span = document.createElement("span");
+      span.innerHTML = text + " <small>(opcional, até 16 letras)</small>";
+      const input = document.createElement("input");
+      input.maxLength = 16;
+      input.placeholder = "Ex.: Mel";
+      input.value = value;
+      input.addEventListener("input", () => onInput(input.value));
+      label.append(span, input);
+      return label;
+    };
+    if (art) fields.push(field(ex && state.buyKind === "copia" ? "Nome no verso do 1º" : "Nome no verso", nameOf(0), (v) => {
+      setName(0, v);
+      $("#buy-art-sub").textContent = v.trim() ? `Nome no verso: ${v.trim()}` : "Sem nome no verso";
+    }));
+    if (art && ex && state.buyKind === "copia") {
+      for (let i = 1; i <= ex; i++) fields.push(field(`Nome no verso do ${i + 1}º`, state.copyNames[i] || "", (v) => { state.copyNames[i] = v; }));
+    }
+    names.replaceChildren(...fields);
+
+    // entrega
+    const pickup = o.delivery_method === "retirada";
+    const a = o.address || {};
+    const pk = (PN.publicConfig && PN.publicConfig.pickup) || {};
+    $("#buy-ship-title").textContent = pickup ? "Retirada" : "Entrega para " + ((o.contact || {}).name || "").split(" ")[0];
+    $("#buy-addr").textContent = pickup ? `${pk.name || ""} — ${pk.address || ""}`
+      : `${a.street}, ${a.number}${a.complement ? " — " + a.complement : ""} · ${a.district} · ${a.city}/${a.state} · CEP ${PN.maskCep(a.cep || "")}`;
+    $("#buy-after").textContent = art && !(ex && state.buyKind === "novo")
+      ? "🎄 Pagou, está feito: seu pedido vai direto para a produção e você recebe a confirmação por e-mail."
+      : "📸 Depois do pagamento você volta direto para cá para criar as artes que faltam.";
+    updateBuyTotals();
+    if (!pickup) requoteBuy();
+  }
+
+  function updateBuyTotals() {
+    const o = state.order;
+    const ex = state.buyQty;
+    const pickup = o.delivery_method === "retirada";
+    const items = o.price_cents + kitSum(ex);
+    $("#buy-row-items").textContent = ex ? `${ex + 1} enfeites` : "Enfeite personalizado";
+    $("#buy-items").textContent = PN.money(items);
+    const q = state.buyQuote && state.buyQuote.qty === ex ? state.buyQuote : null;
+    const ship = pickup ? 0 : q ? q.cents : null;
+    $("#buy-ship").textContent = pickup ? "Sem frete" : ship === null ? "calculando…" : ship ? PN.money(ship) : "Grátis 🎉";
+    $("#buy-ship-label").textContent = pickup ? "(retirada)" : q && q.days ? `(chega em ~${q.days} dias úteis depois de pronto)` : "";
+    $("#buy-total").textContent = ship === null ? "—" : PN.money(items + ship);
+    const btn = $("#pay-btn");
+    if (!btn.dataset.busy) {
+      btn.disabled = ship === null;
+      btn.textContent = ship === null ? "Calculando o frete…" : `Pagar ${PN.money(items + ship)}`;
+    }
+  }
+
+  let buySeq = 0;
+  async function requoteBuy() {
+    const o = state.order;
+    const ex = state.buyQty;
+    if (state.buyQuote && state.buyQuote.qty === ex) return;
+    const seq = ++buySeq;
+    try {
+      const q = await PN.api("quote", { cep: (o.address || {}).cep, extras: ex });
+      if (seq !== buySeq) return;
+      state.buyQuote = { qty: ex, cents: q.shipping_cents || 0, days: q.days };
+      setError("#buy-error", "");
+    } catch (err) {
+      if (seq !== buySeq) return;
+      setError("#buy-error", err.message);
+      return;
+    }
+    updateBuyTotals();
+  }
+
+  document.querySelectorAll("[data-buy-kind]").forEach((b) => b.addEventListener("click", () => { state.buyKind = b.dataset.buyKind; renderBuy(); }));
+  $("#buy-edit").addEventListener("click", openLead);
+  $("#buy-change").addEventListener("click", () => { state.step = "studio"; state.chooseLater = false; render(); window.scrollTo(0, 0); });
+  $("#buy-back").addEventListener("click", () => { state.step = "studio"; state.chooseLater = false; render(); window.scrollTo(0, 0); });
+  $("#again-buy").addEventListener("click", () => { state.chooseLater = true; state.step = "buy"; render(); window.scrollTo(0, 0); });
+  $("#pending-back").addEventListener("click", () => { state.returnedPay = false; state.step = "buy"; render(); window.scrollTo(0, 0); });
+
+  $("#pay-btn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const o = state.order;
+    setError("#buy-error", "");
+    const ex = state.buyQty;
+    const names = [nameOf(0).trim()];
+    for (let i = 1; i <= ex; i++) names.push(state.buyKind === "copia" ? (state.copyNames[i] || "").trim() : "");
+    btn.dataset.busy = "1";
+    btn.disabled = true;
+    btn.textContent = "Abrindo o pagamento…";
+    const unlock = setTimeout(() => { delete btn.dataset.busy; updateBuyTotals(); }, 25000);
+    PN.track("InitiateCheckout", { value: (o.price_cents + kitSum(ex)) / 100, currency: "BRL" });
+    try {
+      const out = await PN.api("pay", {
+        token: state.token, extras: ex, kind: state.buyKind, pet_names: names, pet_name: names[0],
+        customer_notes: $("#buy-notes-text").value, choose_later: state.chooseLater,
+      });
+      if (out.redirect) { location.href = out.redirect; return; }
+      // pedido de teste (modo de teste ligado): já está pago
+      clearTimeout(unlock);
+      delete btn.dataset.busy;
+      state.order = out.order;
+      state.step = "studio";
+      state.chooseLater = false;
+      render();
+      window.scrollTo(0, 0);
+      if (state.order.confirmed) PN.ready.then(offerWhatsApp);
+    } catch (err) {
+      clearTimeout(unlock);
+      delete btn.dataset.busy;
+      setError("#buy-error", err.message);
+      updateBuyTotals();
+    }
+  });
+  window.addEventListener("pageshow", () => {
+    const btn = $("#pay-btn");
+    if (btn.dataset.busy) { delete btn.dataset.busy; if (state.order && state.step === "buy") updateBuyTotals(); }
   });
 
   // entrar com e-mail + WhatsApp

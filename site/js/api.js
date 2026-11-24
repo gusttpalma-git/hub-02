@@ -89,11 +89,11 @@
       try {
         if (window.fbq) window.fbq("track", event, data || {});
         if (window.gtag) {
-          const map = { InitiateCheckout: "begin_checkout", Purchase: "purchase", PageView: "page_view" };
+          const map = { InitiateCheckout: "begin_checkout", Purchase: "purchase", PageView: "page_view", Lead: "generate_lead", StartTrial: "start_trial" };
           window.gtag("event", map[event] || event, data || {});
         }
         if (window.ttq && event !== "PageView") {
-          const map = { InitiateCheckout: "InitiateCheckout", Purchase: "CompletePayment" };
+          const map = { InitiateCheckout: "InitiateCheckout", Purchase: "CompletePayment", Lead: "SubmitForm", StartTrial: "ClickButton" };
           const d = data || {};
           const props = { value: d.value, currency: d.currency || "BRL", content_type: "product", content_id: "enfeite-pet" };
           if (!d.transaction_id) window.ttq.track(map[event] || event, props);

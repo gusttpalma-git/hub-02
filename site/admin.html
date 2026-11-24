@@ -128,11 +128,21 @@
         <div class="card" data-group="vendas">
           <h3>Preço e artes</h3>
           <label class="field"><span>Preço do enfeite (R$)</span><input name="price" inputmode="decimal" required></label>
-          <label class="field"><span>Artes por pedido <small>(tentativas do cliente)</small></span><input name="credits" type="number" min="1" max="10" required></label>
+          <label class="field"><span>Artes no total por pedido <small>(teste grátis + depois de pagar)</small></span><input name="credits" type="number" min="1" max="10" required></label>
           <label class="field"><span>Cores do enfeite <small>(máximo, contando preto e branco)</small></span>
             <select name="max_colors"><option value="2">2 cores</option><option value="3">3 cores</option><option value="4">4 cores</option><option value="5">5 cores</option><option value="6">6 cores</option></select></label>
           <label class="switch"><input type="checkbox" name="test_mode"> Modo de teste <small class="muted">(pedidos sem cobrança)</small></label>
           <p class="small muted" style="margin:8px 0 0">Com o modo de teste ligado, qualquer pessoa cria pedidos grátis. Use só para testar e desligue antes de anunciar.</p>
+        </div>
+        <div class="card" data-group="vendas">
+          <h3>Teste grátis</h3>
+          <p class="small muted">O cliente cria a arte antes de pagar. Cada arte custa alguns centavos de IA; os limites evitam abuso.</p>
+          <div class="row3">
+            <label class="field"><span>Artes grátis</span><input name="trial_credits" type="number" min="1" max="5"></label>
+            <label class="field"><span>Testes por rede/dia</span><input name="trial_ip_limit" type="number" min="1" max="100"></label>
+            <label class="field"><span>Máx. artes grátis/dia</span><input name="trial_daily_cap" type="number" min="0" max="100000"></label>
+          </div>
+          <p class="small muted" style="margin:0">Quem testou e não pagou aparece em Pedidos → “Testes (não pagaram)”, com o WhatsApp para você chamar.</p>
         </div>
         <div class="card" data-group="vendas">
           <h3>Kits (enfeites a mais)</h3>

@@ -32,10 +32,11 @@
     entregue: "Entregues",
     reembolsado: "Reembolsados",
     pendente: "Não pagos",
+    lead: "Testes (não pagaram)",
   };
 
   function bucket(o) {
-    if (o.payment_status === "pending") return "pendente";
+    if (o.payment_status === "pending") return o.trial ? "lead" : "pendente";
     if (o.payment_status === "refunded") return "reembolsado";
     if (!o.confirmed_at) return "aguardando-cliente";
     return o.production_status;
@@ -101,7 +102,7 @@
     );
 
     const filters = $("#filters");
-    filters.replaceChildren(...["aguardando", "aguardando-cliente", "producao", "enviado", "entregue", "pendente", "todos"].map((b) =>
+    filters.replaceChildren(...["aguardando", "aguardando-cliente", "producao", "enviado", "entregue", "lead", "pendente", "todos"].map((b) =>
       el("button", { class: "chip" + (filter === b ? " on" : ""), type: "button", onclick: () => { filter = b; renderOrders(); } },
         b === "todos" ? "Todos" : BUCKETS[b], el("b", {}, String(b === "todos" ? orders.length : count(b))))));
 
@@ -110,7 +111,7 @@
   }
 
   function addressText(o) {
-    if (!o.confirmed_at) return "";
+    if (!o.confirmed_at && !o.lead_at) return "";
     if (o.delivery_method === "retirada") return "RETIRADA no ponto\nQuem retira: " + (o.recipient || "");
     return [
       o.recipient,
@@ -191,10 +192,12 @@
     const info = el("div", {},
       el("dl", {},
         el("dt", {}, "Cliente"), el("dd", {}, o.name),
-        el("dt", {}, "WhatsApp"), el("dd", {}, el("a", { href: "https://wa.me/55" + o.whatsapp, target: "_blank", rel: "noopener" }, PN.maskPhone(o.whatsapp))),
+        el("dt", {}, "WhatsApp"), el("dd", {}, el("a", { href: "https://wa.me/55" + o.whatsapp + (b === "lead" ? "?text=" + encodeURIComponent(`Oi, ${(o.name || "").split(" ")[0]}! Aqui é da Patinha de Natal 🎄 Vi que você testou o enfeite com a arte do seu pet. Ficou alguma dúvida? Posso te ajudar a finalizar?`) : ""), target: "_blank", rel: "noopener" }, PN.maskPhone(o.whatsapp || "") + (b === "lead" ? " 💬 chamar" : ""))),
         el("dt", {}, "E-mail"), el("dd", {}, o.email),
         el("dt", {}, "Pet"), el("dd", {}, o.pet_name || "—"),
-        el("dt", {}, "Pago em"), el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "")),
+        b === "lead" ? el("dt", {}, "Testou em") : el("dt", {}, "Pago em"),
+        b === "lead" ? el("dd", {}, date(o.lead_at) + (o.amount_cents ? " · abriu o pagamento de " + PN.money(o.amount_cents) : " · ainda não abriu o pagamento"))
+          : el("dd", {}, date(o.paid_at) + " · " + PN.money(o.amount_cents) + (o.shipping_cents ? " (frete " + PN.money(o.shipping_cents) + ")" : "")),
         o.delivery_method !== "retirada" && o.shipping_label && el("dt", {}, "Envio"),
         o.delivery_method !== "retirada" && o.shipping_label && el("dd", {}, o.shipping_label + (o.shipping_cost_cents ? " · custo " + PN.money(o.shipping_cost_cents) : "") + " (compre esta etiqueta no Melhor Envio)"),
         el("dt", {}, "Artes"), el("dd", {}, o.credits_used + " de " + o.credits_total + " usadas"),
@@ -354,6 +357,9 @@
     const brl = (cents) => ((cents || 0) / 100).toFixed(2).replace(".", ",");
     f.price.value = (s.price_cents / 100).toFixed(2).replace(".", ",");
     f.credits.value = s.credits_per_order;
+    f.trial_credits.value = s.trial_credits || 2;
+    f.trial_ip_limit.value = s.trial_ip_limit || 6;
+    f.trial_daily_cap.value = s.trial_daily_cap ?? 300;
     f.test_mode.checked = s.test_mode;
     maxColors = s.max_colors || 4;
     const pick = s.pickup || {};
@@ -455,6 +461,9 @@
       const out = await call("admin-save-settings", {
         price_cents: price,
         credits_per_order: f.credits.value,
+        trial_credits: f.trial_credits.value,
+        trial_ip_limit: f.trial_ip_limit.value,
+        trial_daily_cap: f.trial_daily_cap.value,
         test_mode: f.test_mode.checked,
         max_colors: f.max_colors.value,
         store: Object.fromEntries(STORE_FIELDS.map((k) => [k, f["st_" + k].value])),
