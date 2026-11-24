@@ -2,26 +2,28 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Patinha de Natal — o enfeite de Natal com a carinha do seu pet</title>
-  <meta name="description" content="Teste grátis: envie uma foto do seu pet e veja em 1 minuto o enfeite de Natal com a carinha dele. Gostou? Receba em casa, impresso em 3D.">
-  <meta property="og:title" content="O enfeite de Natal com a carinha do seu pet">
-  <meta property="og:description" content="Teste grátis: envie a foto e veja na hora como fica. Gostou? Receba em casa, impresso em 3D.">
-  <meta property="og:image" content="img/exemplo-4-arte.png">
+  <meta name="description" content="Mande uma foto do seu pet e veja grátis, em 1 minuto, o enfeite de Natal com a carinha dele. Gostou? Imprimimos em 3D e entregamos.">
+  <meta property="og:title" content="Seu pet virou enfeite de Natal 🎄">
+  <meta property="og:description" content="Mande a foto e veja grátis como fica. Gostou? Imprimimos em 3D e entregamos.">
+  <meta property="og:image" content="img/galeria-1.jpg">
   <meta name="theme-color" content="#fbf6ee">
   <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="img/galeria-1.jpg">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/home.css">
 </head>
-<body>
+<body class="home">
   <div class="testbar" id="testbar" hidden>MODO DE TESTE ligado — os pedidos não são cobrados</div>
 
-  <header class="topbar">
+  <header class="h-top">
     <div class="wrap">
-      <a class="brand" href="index.html"><img src="img/favicon.svg" alt="" width="34" height="34"><span data-marca>Patinha de Natal</span></a>
-      <button class="pill" id="open-recover" type="button">Meu pedido</button>
+      <a class="brand" href="index.html"><img src="img/favicon.svg" alt="" width="32" height="32"><span data-marca>Patinha de Natal</span></a>
+      <button class="h-mine" id="open-recover" type="button">Meu pedido</button>
     </div>
   </header>
 
@@ -33,121 +35,51 @@
   </div>
 
   <main>
-    <!-- topo -->
-    <section class="hero">
-      <div class="garland" aria-hidden="true"></div>
-      <div class="wrap hero-grid">
-        <div class="hero-copy">
-          <p class="eyebrow">Enfeite de Natal impresso em 3D</p>
-          <h1>O seu pet <em>pendurado na árvore</em></h1>
-          <p class="lead">Envie uma foto e <b>veja grátis, em 1 minuto</b>, o enfeite com a carinha do seu pet. Gostou? A gente imprime e entrega.</p>
+    <!-- topo: o produto em destaque e um único botão -->
+    <section class="h-hero">
+      <div class="h-garland" aria-hidden="true"></div>
+      <div class="wrap h-grid">
+        <div class="h-show" id="h-show" aria-label="Exemplos: a foto do pet e o enfeite pronto">
+          <div class="h-frame">
+            <figure class="h-slide on" data-name="Mimi"><img class="h-orn" src="img/galeria-1.jpg" alt="Enfeite impresso do gato Mimi"><img class="h-pet" src="img/exemplo-4-foto.jpg" alt="Foto do gato Mimi"></figure>
+            <figure class="h-slide" data-name="Tigrão"><img class="h-orn" src="img/galeria-2.jpg" alt="Enfeite impresso do gato Tigrão" loading="lazy"><img class="h-pet" src="img/exemplo-2-foto.jpg" alt="Foto do gato Tigrão" loading="lazy"></figure>
+            <figure class="h-slide" data-name="Pipoca"><img class="h-orn" src="img/galeria-3.jpg" alt="Enfeite impresso da cachorrinha Pipoca" loading="lazy"><img class="h-pet" src="img/exemplo-1-foto.jpg" alt="Foto da cachorrinha Pipoca" loading="lazy"></figure>
+            <figure class="h-slide" data-name="Thor"><img class="h-orn" src="img/galeria-4.jpg" alt="Enfeite impresso do cachorro Thor" loading="lazy"><img class="h-pet" src="img/exemplo-3-foto.jpg" alt="Foto do cachorro Thor" loading="lazy"></figure>
+            <span class="h-tag h-tag-photo">a foto</span>
+            <svg class="h-arrow" viewBox="0 0 80 60" aria-hidden="true"><path d="M6 50 C 20 14, 50 6, 72 16" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 9"/><path d="M62 8 L74 16 L62 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="h-tag h-tag-orn">o enfeite do <b id="h-name">Mimi</b></span>
+          </div>
+          <div class="h-dots" role="tablist" aria-label="Escolher exemplo"><button class="on" type="button" aria-label="Exemplo 1"></button><button type="button" aria-label="Exemplo 2"></button><button type="button" aria-label="Exemplo 3"></button><button type="button" aria-label="Exemplo 4"></button></div>
         </div>
-        <div class="hero-offer">
+
+        <div class="h-copy">
+          <p class="h-kicker">🎄 Enfeite de Natal impresso em 3D</p>
+          <h1>Seu pet virou <em>enfeite de Natal</em></h1>
+          <p class="h-lead">Mande uma foto e veja na hora, <b>de graça</b>, como fica. Gostou? A gente imprime e entrega na sua casa.</p>
           <p class="notice" data-aviso hidden></p>
-          <a class="btn hero-cta try-cta" href="criar.html?novo=1">📸 Testar grátis com o meu pet</a>
-          <p class="try-note">Sem pagar nada para testar · você só compra se gostar</p>
-          <ol class="mini-steps" aria-label="Como funciona">
-            <li><span>1</span><b>Envie a foto</b><small>do celular</small></li>
-            <li><span>2</span><b>Veja a arte e o 3D</b><small>grátis, em 1 min</small></li>
-            <li><span>3</span><b>Gostou? Peça</b><small>e receba em casa</small></li>
-          </ol>
-          <div class="offer slim">
-            <div class="price">
-              <strong data-price>R$ 39,90</strong>
-              <span id="hero-kit">Pix ou cartão</span>
-            </div>
-            <p class="free-ship"><span aria-hidden="true">🚚</span> <b data-frete>Frete grátis</b><span data-frete-sub>para quase todo o Brasil</span></p>
-          </div>
-        </div>
-
-        <div class="stage" id="stage" aria-label="Da foto ao enfeite: veja a transformação">
-          <div class="stage-frame">
-            <div class="stage-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-            <div class="stage-layer stage-photo on" data-step="0"><img src="img/exemplo-4-foto.jpg" alt="Foto de um gato preto e branco de olhos amarelos"></div>
-            <div class="stage-layer stage-art" data-step="1"><img src="img/exemplo-4-arte.png" alt="A arte criada a partir da foto"></div>
-            <div class="stage-layer stage-3d" data-step="2" id="stage-3d"><div class="mockup stage-fallback"><img src="img/exemplo-4-arte.png" alt="O enfeite impresso"></div></div>
-            <div class="stage-layer stage-tree" data-step="3"><div class="mockup"><img src="img/exemplo-4-arte.png" alt="O enfeite pendurado na árvore de Natal"></div></div>
-            <div class="stage-scan" id="stage-scan"></div>
-            <button class="stage-nav prev" type="button" data-nav="-1" aria-label="Etapa anterior">‹</button>
-            <button class="stage-nav next" type="button" data-nav="1" aria-label="Próxima etapa">›</button>
-            <span class="stage-hint" id="stage-hint" hidden><span aria-hidden="true">👆</span> Arraste para girar</span>
-          </div>
-          <div class="stage-caption" aria-live="polite">
-            <span class="stage-num" id="stage-num">1</span>
-            <div><strong id="stage-title">Você envia uma foto</strong><span id="stage-text">Qualquer foto do celular, com o rostinho aparecendo.</span></div>
-          </div>
-          <ol class="stage-steps">
-            <li><button type="button" class="on" data-go="0">Foto</button></li>
-            <li><button type="button" data-go="1">Arte</button></li>
-            <li><button type="button" data-go="2">Peça 3D</button></li>
-            <li><button type="button" data-go="3">Na árvore</button></li>
-          </ol>
-        </div>
-      </div>
-    </section>
-
-    <!-- pontos fortes -->
-    <section class="perks" aria-label="Por que pedir aqui">
-      <ul class="wrap perks-grid">
-        <li><span class="perk-ico" aria-hidden="true">🎁</span><b>Teste grátis</b><small>Veja como fica antes de pagar qualquer coisa</small></li>
-        <li><span class="perk-ico" aria-hidden="true">⚡</span><b>Arte na hora</b><small>Em cerca de 1 minuto, já em 3D</small></li>
-        <li><span class="perk-ico" aria-hidden="true">🎨</span><b>Até <span data-credits>4</span> artes</b><small><span data-trial>2</span> grátis no teste, mais depois do pedido</small></li>
-        <li><span class="perk-ico" aria-hidden="true">🚚</span><b>Frete grátis</b><small>Para quase todo o Brasil</small></li>
-      </ul>
-    </section>
-
-    <!-- como funciona (com o vídeo da criação) -->
-    <section class="band" id="como-funciona">
-      <div class="wrap video-grid">
-        <div class="phone">
-          <video id="demo-video" src="video/criacao.mp4" poster="video/criacao.jpg" muted loop playsinline preload="none" aria-label="Gravação da tela: a foto do gato vira arte e depois enfeite 3D"></video>
-          <button class="video-play" type="button" id="video-play" aria-label="Assistir">▶</button>
-        </div>
-        <div class="video-copy">
-          <p class="eyebrow">Como funciona</p>
-          <h2>Tudo pelo celular, em poucos minutos</h2>
-          <ol class="video-steps">
-            <li><b>Envie a foto do seu pet</b> e, enquanto a arte é desenhada, preencha seus dados de entrega.</li>
-            <li><b>Veja a arte e o enfeite em 3D</b>, com o nome no verso. É grátis e você pode testar <span data-trial>2</span> versões.</li>
-            <li><b>Gostou? Peça com segurança</b> pelo Mercado Pago (Pix ou cartão) e receba em casa.</li>
-          </ol>
-          <a class="btn" href="criar.html?novo=1">📸 Testar grátis</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- exemplos -->
-    <section id="exemplos">
-      <div class="wrap">
-        <div class="section-head">
-          <p class="eyebrow">Exemplos</p>
-          <h2>Qualquer foto vira enfeite</h2>
-          <p>Qualquer pose serve, desde que o rostinho apareça bem: na arte ele sai sempre de frente, com as patinhas no aro.</p>
-        </div>
-        <div class="gallery">
-          <figure class="sample"><img class="photo" src="img/exemplo-4-foto.jpg" alt="Foto de um gato preto e branco" loading="lazy"><img class="art" src="img/exemplo-4-arte.png" alt="Arte do gato preto e branco" loading="lazy"><figcaption>Gato frajola</figcaption></figure>
-          <figure class="sample"><img class="photo" src="img/exemplo-1-foto.jpg" alt="Foto de um chihuahua" loading="lazy"><img class="art" src="img/exemplo-1-arte.png" alt="Arte do chihuahua" loading="lazy"><figcaption>Chihuahua</figcaption></figure>
-          <figure class="sample"><img class="photo" src="img/exemplo-2-foto.jpg" alt="Foto de um gato laranja" loading="lazy"><img class="art" src="img/exemplo-2-arte.png" alt="Arte do gato laranja" loading="lazy"><figcaption>Gato laranja</figcaption></figure>
-          <figure class="sample"><img class="photo" src="img/exemplo-3-foto.jpg" alt="Foto de um cachorro preto" loading="lazy"><img class="art" src="img/exemplo-3-arte.png" alt="Arte do cachorro preto" loading="lazy"><figcaption>Spaniel</figcaption></figure>
-        </div>
-      </div>
-    </section>
-
-    <!-- o produto -->
-    <section class="band-pine">
-      <div class="wrap product">
-        <div class="mockup product-media"><img src="img/exemplo-4-arte.png" alt="Enfeite com o gato frajola pendurado numa árvore de Natal" loading="lazy"></div>
-        <div>
-          <p class="eyebrow">O enfeite</p>
-          <h2>Feito um a um, para durar muitos Natais</h2>
-          <p class="muted">Cada peça é impressa em 3D aqui, sob encomenda. As cores ficam em relevo: dá para sentir o desenho com a ponta dos dedos.</p>
-          <ul class="specs">
-            <li><b>Tamanho</b><span><span data-tamanho>7 cm</span> de diâmetro, com alça para pendurar</span></li>
-            <li><b>Cores</b><span>Até 4, nas cores reais dos nossos filamentos</span></li>
-            <li><b>Verso</b><span>Nome do pet gravado</span></li>
-            <li><b>Arte</b><span>Pronta na hora, em cerca de 1 minuto</span></li>
-            <li><b>Produção</b><span><span data-prazo>5 dias úteis</span> depois da sua escolha</span></li>
+          <a class="btn h-cta" id="h-cta" href="criar.html?novo=1">📸 Criar o meu grátis</a>
+          <ul class="h-chips">
+            <li>✅ Teste grátis</li>
+            <li>⚡ Pronto em 1 min</li>
+            <li>🚚 <span data-frete>Frete grátis</span></li>
           </ul>
+          <p class="h-price">Enfeite por <b data-price>R$ 39,90</b><span id="hero-kit"></span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- como funciona -->
+    <section class="h-how" id="como-funciona">
+      <div class="wrap narrow-how">
+        <div>
+          <p class="eyebrow">Como funciona</p>
+          <h2>Pronto em 3 passos</h2>
+          <ol class="h-steps">
+            <li><span>1</span><div><b>Mande a foto do seu pet</b><small>Do celular mesmo, com o rostinho de frente.</small></div></li>
+            <li><span>2</span><div><b>Veja a arte e o enfeite em 3D</b><small>Na hora e de graça. Dá para testar <span data-trial>2</span> versões e pôr o nome no verso.</small></div></li>
+            <li><span>3</span><div><b>Gostou? Peça e receba em casa</b><small>Pix ou cartão pelo Mercado Pago. Imprimimos e entregamos.</small></div></li>
+          </ol>
+          <a class="btn h-cta-2" href="criar.html?novo=1">📸 Criar o meu grátis</a>
         </div>
       </div>
     </section>
@@ -157,8 +89,8 @@
       <div class="wrap">
         <div class="section-head">
           <p class="eyebrow">Galeria</p>
-          <h2>Veja o enfeite de perto</h2>
-          <p>Toque numa foto para ampliar.</p>
+          <h2>Feitos com carinho</h2>
+          <p>Cada enfeite é impresso aqui, um a um. Toque para ampliar.</p>
         </div>
         <div class="polaroids" id="polaroids">
           <figure class="polaroid p1"><button type="button" aria-label="Ampliar foto 1"><img src="img/galeria-1.jpg" alt="Enfeite impresso do gato Mimi" loading="lazy"></button><figcaption>Mimi</figcaption></figure>
@@ -170,8 +102,25 @@
       </div>
     </section>
 
+    <!-- o produto -->
+    <section class="band-pine">
+      <div class="wrap product">
+        <div class="mockup product-media"><img src="img/exemplo-4-arte.png" alt="Enfeite com o gato frajola pendurado numa árvore de Natal" loading="lazy"></div>
+        <div>
+          <p class="eyebrow">O enfeite</p>
+          <h2>Feito para durar muitos Natais</h2>
+          <ul class="specs">
+            <li><b>Tamanho</b><span><span data-tamanho>7 cm</span>, com alça para pendurar</span></li>
+            <li><b>Cores</b><span>Até 4, em relevo: dá para sentir o desenho</span></li>
+            <li><b>Verso</b><span>Nome do pet gravado</span></li>
+            <li><b>Produção</b><span><span data-prazo>5 dias úteis</span> depois do pedido</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <!-- preços -->
-    <section id="precos">
+    <section id="precos" class="h-prices">
       <div class="wrap">
         <div class="section-head">
           <p class="eyebrow">Preços</p>
@@ -179,9 +128,9 @@
           <p>Frete grátis para quase todo o Brasil. Quanto mais enfeites, menor o preço de cada um.</p>
         </div>
         <div class="price-cards" id="price-cards">
-          <div class="price-card"><b>1 enfeite</b><strong data-price>R$ 39,90</strong><small>&nbsp;</small></div>
+          <div class="price-card"><b>1 enfeite</b><strong data-price>R$ 39,90</strong><small>com nome no verso</small></div>
         </div>
-        <p class="center" style="margin:22px 0 0"><a class="btn hero-cta" href="criar.html?novo=1">📸 Testar grátis com o meu pet</a></p>
+        <p class="center" style="margin:26px 0 0"><a class="btn h-cta-2" href="criar.html?novo=1">📸 Criar o meu grátis</a></p>
         <aside class="deadlines" id="deadlines" hidden>
           <h3>Para chegar antes do Natal</h3>
           <p class="small muted" style="margin:0">Último dia recomendado para pedir, por região:</p>
@@ -198,8 +147,8 @@
           <p class="eyebrow">Dúvidas</p>
           <h2>Perguntas comuns</h2>
         </div>
-        <details><summary>O teste é grátis mesmo?</summary><p>Sim. Você envia a foto, informa seus dados de entrega e vê a arte e o enfeite em 3D sem pagar nada. Pode testar <span data-trial>2</span> versões. Só paga se quiser o enfeite.</p></details>
-        <details><summary>Por que pedem meus dados no teste?</summary><p>Para mostrar o resultado e já deixar a entrega pronta: se gostar, é só pagar. Usamos seus dados só para o pedido e para te mandar a arte por e-mail. Nada de spam.</p></details>
+        <details><summary>O teste é grátis mesmo?</summary><p>Sim. Você envia a foto e vê a arte e o enfeite em 3D sem pagar nada, e pode testar <span data-trial>2</span> versões. Só paga se quiser o enfeite.</p></details>
+        <details><summary>Por que pedem meu nome e e-mail?</summary><p>Para guardar a sua arte e te mandar o link dela por e-mail, assim você volta quando quiser. O endereço pode ser preenchido enquanto a arte é desenhada, para o pedido ficar pronto em um toque. Nada de spam.</p></details>
         <details><summary>Que foto devo enviar?</summary><p>Uma foto com o rostinho do pet de frente, com boa luz e só ele na foto. Foto de celular funciona muito bem; o fundo não importa.</p></details>
         <details><summary>E se eu não gostar da arte?</summary><p>No teste você vê <span data-trial>2</span> versões grátis, com a mesma foto ou com outra. Se fizer o pedido sem ter gostado, ganha mais artes para criar depois do pagamento (até <span data-credits>4</span> no total). Se nenhuma ficar do seu agrado, fale com a gente pelo WhatsApp: a gente resolve com você e, se não der certo, devolve o valor. Só produzimos a arte que você escolher.</p></details>
         <details><summary>O frete é grátis mesmo?</summary><p>Sim, para quase todo o Brasil. Só quando o envio para o seu CEP custa mais de <span data-free-up>R$ 20,00</span> você paga a diferença, e o valor aparece antes de pagar.</p></details>
@@ -215,8 +164,8 @@
     <section class="closing">
       <div class="narrow">
         <h2>Um Natal com quem você ama</h2>
-        <p>Deixe a árvore deste ano ainda mais especial.</p>
-        <a class="btn" href="criar.html?novo=1">📸 Testar grátis com o meu pet</a>
+        <p>Veja agora como fica o enfeite do seu pet. É grátis.</p>
+        <a class="btn h-cta-2" href="criar.html?novo=1">📸 Criar o meu grátis</a>
       </div>
     </section>
   </main>
@@ -229,7 +178,7 @@
     </div>
   </footer>
 
-  <div class="sticky-cta" id="sticky"><a class="btn block" href="criar.html?novo=1">📸 Testar grátis com o meu pet</a></div>
+  <div class="sticky-cta" id="sticky"><a class="btn block" href="criar.html?novo=1">📸 Criar o meu grátis</a></div>
 
   <dialog id="lightbox" class="lightbox" aria-label="Foto ampliada">
     <button class="close" type="button" aria-label="Fechar" data-close>×</button>
@@ -244,7 +193,7 @@
   <dialog id="recover">
     <button class="close" type="button" aria-label="Fechar" data-close>×</button>
     <form class="inner" id="recover-form" novalidate>
-      <h3>Continuar meu pedido</h3>
+      <h3>Meu pedido</h3>
       <p class="muted">Informe o e-mail e o WhatsApp que você usou no teste ou na compra.</p>
       <div class="alert error" id="recover-error" hidden role="alert"></div>
       <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" required></label>
@@ -255,10 +204,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/vendor/earcut.min.js" defer></script>
-  <script src="js/ornament3d.js" defer></script>
   <script src="js/landing.js"></script>
-  <script src="js/stage.js" defer></script>
   <script src="js/gallery.js" defer></script>
 </body>
 </html>

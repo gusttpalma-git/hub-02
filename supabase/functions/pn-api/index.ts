@@ -13,6 +13,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { flattenColors } from "./flatten.ts";
 import { checkRegion, esc, mailLayout, quoteShipping, REGION_LABEL, REGIONS, sendMail } from "./extras.ts";
 import { artPrompt, SPECIES } from "./prompts.ts";
+import { PNG } from "npm:pngjs@7.0.0";
+import { Buffer } from "node:buffer";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -434,12 +436,15 @@ async function orderView(order: any) {
   const { data: fresh } = await db.from("pn_orders").select("*").eq("id", order.id).single();
   const o = fresh ?? order;
   const { data: gens } = await db.from("pn_generations")
-    .select("id, status, item, result_path, created_at").eq("order_id", o.id).order("created_at");
+    .select("id, status, item, result_path, preview_path, created_at").eq("order_id", o.id).order("created_at");
   const { data: items } = await db.from("pn_order_items")
     .select("position, kind, credits_total, credits_used, chosen_generation, pet_name").eq("order_id", o.id).order("position");
   // Teste grátis: a arte só aparece depois que o cliente informa os dados.
   const hidden = o.trial && !o.lead_at;
-  const urls = hidden ? {} : await signedUrls((gens ?? []).map((g) => g.result_path));
+  // Antes de pagar, o cliente vê só a prévia (menor); a arte original fica para a produção.
+  const unpaid = o.payment_status !== "paid";
+  const shown = (g: { result_path: string | null; preview_path: string | null }) => (unpaid && g.preview_path) || g.result_path || "";
+  const urls = hidden ? {} : await signedUrls((gens ?? []).map(shown));
   const c = cfg(await loadSettings());
   const { count: upPending } = await db.from("pn_upsells").select("id", { count: "exact", head: true })
     .eq("order_id", o.id).eq("status", "pending").gt("created_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString());
@@ -464,13 +469,14 @@ async function orderView(order: any) {
     credits_left: Math.max(0, o.credits_total - o.credits_used),
     generations: (gens ?? []).map((g) => ({
       id: g.id, status: g.status, item: g.item ?? 0,
-      url: g.result_path ? urls[g.result_path] ?? null : null,
+      url: g.result_path ? urls[shown(g)] ?? null : null,
       // link curto e permanente da arte, para o cliente mandar no WhatsApp
       share_url: g.result_path && !hidden ? `${FUNCTION_URL}?action=art&g=${g.id}` : null,
     })),
     trial: !!o.trial,
     lead: !!o.lead_at,
     contact: o.lead_at ? { name: o.name, email: o.email, whatsapp: o.whatsapp } : null,
+    address_set: o.delivery_method === "retirada" || !!o.cep,
     price_cents: c.priceCents,
     extra_prices: c.extraMax > 0 ? c.extraPrices.slice(0, c.extraMax) : [],
     // artes que o cliente ganha ao pagar (além das que já usou no teste)
@@ -496,6 +502,21 @@ async function orderView(order: any) {
 }
 
 // ───────────────────────── geração da arte ─────────────────────────
+
+// Prévia menor (≈512 px) da arte: é o que o cliente vê antes de pagar. A original fica para a produção.
+function previewPng(png: Uint8Array): Uint8Array {
+  const src = PNG.sync.read(Buffer.from(png));
+  const f = Math.max(1, Math.round(src.width / 512));
+  const w = Math.floor(src.width / f), h = Math.floor(src.height / f);
+  const out = new PNG({ width: w, height: h });
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const si = ((y * f) * src.width + x * f) * 4, di = (y * w + x) * 4;
+      for (let k = 0; k < 4; k++) out.data[di + k] = src.data[si + k];
+    }
+  }
+  return new Uint8Array(PNG.sync.write(out));
+}
 
 async function runGeneration(genId: string, orderId: string, photo: Uint8Array, photoType: string, species: string, c: ReturnType<typeof cfg>) {
   try {
@@ -541,10 +562,33 @@ async function runGeneration(genId: string, orderId: string, photo: Uint8Array, 
     const path = `${orderId}/${genId}-arte.${ext}`;
     const up = await db.storage.from(BUCKET).upload(path, bytes, { contentType: type, upsert: true });
     if (up.error) throw new Error(`storage: ${up.error.message}`);
+    let previewPath: string | null = null;
+    if (ext === "png") {
+      try {
+        const pv = `${orderId}/${genId}-previa.png`;
+        const r = await db.storage.from(BUCKET).upload(pv, previewPng(bytes), { contentType: "image/png", upsert: true });
+        if (!r.error) previewPath = pv;
+      } catch (err) {
+        console.error("prévia não gerada", err);
+      }
+    }
 
     await db.from("pn_generations")
-      .update({ status: "done", result_path: path, finished_at: new Date().toISOString() })
+      .update({ status: "done", result_path: path, preview_path: previewPath, finished_at: new Date().toISOString() })
       .eq("id", genId).eq("status", "processing");
+
+    // Teste grátis: a primeira arte pronta vai por e-mail, para o cliente voltar e comprar depois.
+    const { data: ord } = await db.from("pn_orders").select("trial, payment_status, email, name, site_url, token").eq("id", orderId).maybeSingle();
+    if (ord?.trial && ord.payment_status === "pending" && ord.email && c.mail.apiKey && c.mail.from) {
+      const { count } = await db.from("pn_generations").select("id", { count: "exact", head: true }).eq("order_id", orderId).eq("status", "done");
+      if (count === 1) {
+        const link = ord.site_url ? `${ord.site_url}criar.html?t=${ord.token}` : "";
+        await sendMail(c.mail, ord.email, "A arte do seu pet ficou pronta 🐾", mailLayout(c.mail.brand, "A arte do seu pet ficou pronta 🎄", [
+          `Olá, ${esc(String(ord.name || "").split(" ")[0])}! Desenhamos o seu pet e guardamos a arte para você.`,
+          "Toque no botão para ver o enfeite em 3D, criar outra versão ou fazer o pedido quando quiser.",
+        ], link ? { text: "Ver o enfeite do meu pet", url: link } : undefined));
+      }
+    }
   } catch (err) {
     console.error("geração falhou", genId, err);
     await db.rpc("pn_fail_generation", { p_gen: genId, p_error: String((err as Error)?.message ?? err) });
@@ -582,9 +626,11 @@ async function publicConfig() {
 async function openArt(url: URL) {
   const id = url.searchParams.get("g");
   if (!isUuid(id)) throw new HttpError(404, "Arte não encontrada.");
-  const { data: gen } = await db.from("pn_generations").select("result_path").eq("id", id).eq("status", "done").maybeSingle();
+  const { data: gen } = await db.from("pn_generations").select("result_path, preview_path, pn_orders(payment_status)").eq("id", id).eq("status", "done").maybeSingle();
   if (!gen?.result_path) throw new HttpError(404, "Arte não encontrada.");
-  const { data } = await db.storage.from(BUCKET).createSignedUrl(gen.result_path, 60 * 60);
+  // deno-lint-ignore no-explicit-any
+  const paid = (gen as any).pn_orders?.payment_status === "paid";
+  const { data } = await db.storage.from(BUCKET).createSignedUrl((!paid && gen.preview_path) || gen.result_path, 60 * 60);
   if (!data?.signedUrl) throw new HttpError(404, "Arte não encontrada.");
   return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
@@ -864,7 +910,18 @@ async function clientKey(req: Request): Promise<string | null> {
   return ip ? (await sha256Hex("pn-ip:" + ip)).slice(0, 32) : null;
 }
 
-// Começa um teste grátis: cria o pedido (ainda sem dados do cliente) e devolve o token.
+// Nome, e-mail e WhatsApp do cliente (conferidos).
+function contactOf(b: Body) {
+  const name = clean(b.name, 120);
+  const email = clean(b.email, 160).toLowerCase();
+  const whatsapp = normalizePhone(b.whatsapp);
+  if (name.length < 2) throw new HttpError(400, "Digite seu nome.");
+  if (whatsapp.length < 10 || whatsapp.length > 11) throw new HttpError(400, "Confira seu WhatsApp com DDD.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Confira seu e-mail.");
+  return { name, email, whatsapp };
+}
+
+// Começa um teste grátis: cria o pedido (com nome, e-mail e WhatsApp, se vierem) e devolve o token.
 async function trialStart(req: Request, b: Body) {
   const c = cfg(await loadSettings());
   let site: URL;
@@ -875,6 +932,7 @@ async function trialStart(req: Request, b: Body) {
     throw new HttpError(400, "Endereço do site inválido.");
   }
   const base = site.origin + site.pathname.replace(/[^/]*$/, "");
+  const contact = b.name || b.email || b.whatsapp ? contactOf(b) : null;
   const ip = await clientKey(req);
   if (ip) {
     const { count } = await db.from("pn_orders").select("id", { count: "exact", head: true })
@@ -893,64 +951,57 @@ async function trialStart(req: Request, b: Body) {
     site_url: base,
     credits_total: c.trialCredits,
     is_test: c.testMode,
+    ...(contact ? { ...contact, recipient: contact.name, lead_at: new Date().toISOString() } : {}),
   });
   if (error) throw new HttpError(500, "Não foi possível começar o teste. Tente de novo.");
   return json({ token });
 }
 
-// Dados do cliente e da entrega, preenchidos enquanto a arte é desenhada.
+// Dados do cliente e da entrega. step "contact": só nome/e-mail/WhatsApp; "address": só a entrega
+// (preenchida enquanto a arte é desenhada); sem step: os dois.
 async function lead(b: Body) {
   const order = await getOrderByToken(b.token);
   if (order.confirmed_at || order.payment_status === "refunded") throw new HttpError(409, "Este pedido já foi finalizado.");
-  if (order.payment_status === "paid" && order.shipping_cents > 0 && digits(b.cep) !== order.cep && b.delivery !== "retirada") {
-    throw new HttpError(400, "O frete já foi pago para outro CEP. Fale com a gente pelo WhatsApp para mudar.");
-  }
+  const step = b.step === "contact" || b.step === "address" ? b.step : "all";
   const c = cfg(await loadSettings());
-  const name = clean(b.name, 120);
-  const email = clean(b.email, 160).toLowerCase();
-  const whatsapp = normalizePhone(b.whatsapp);
-  if (name.length < 3) throw new HttpError(400, "Digite seu nome completo.");
-  if (whatsapp.length < 10 || whatsapp.length > 11) throw new HttpError(400, "Confira seu WhatsApp com DDD.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Confira seu e-mail.");
-  const pickup = b.delivery === "retirada";
-  if (pickup && !c.pickup.enabled) throw new HttpError(400, "A retirada não está disponível no momento.");
-  const a = {
-    cep: pickup ? null : digits(b.cep),
-    street: pickup ? null : clean(b.street, 160),
-    number: pickup ? null : clean(b.number, 20),
-    complement: pickup ? null : clean(b.complement, 80) || null,
-    district: pickup ? null : clean(b.district, 100),
-    city: pickup ? null : clean(b.city, 100),
-    state: pickup ? null : clean(b.state, 2).toUpperCase(),
-  };
-  if (!pickup) {
-    if ((a.cep ?? "").length !== 8) throw new HttpError(400, "Confira o CEP (8 números).");
-    if (!a.street) throw new HttpError(400, "Digite o nome da rua.");
-    if (!a.number) throw new HttpError(400, "Digite o número (ou S/N).");
-    if (!a.district) throw new HttpError(400, "Digite o bairro.");
-    if (!a.city) throw new HttpError(400, "Digite a cidade.");
-    if (!/^[A-Z]{2}$/.test(a.state ?? "")) throw new HttpError(400, "Escolha o estado.");
-    try {
-      checkRegion(c.shipping, a.cep as string, order.payment_status !== "paid");
-    } catch (err) {
-      throw new HttpError(400, (err as Error).message);
+  const contact = step === "address" ? null : contactOf(b);
+  if (step === "address" && !order.lead_at) throw new HttpError(400, "Preencha seu nome, e-mail e WhatsApp primeiro.");
+  // deno-lint-ignore no-explicit-any
+  const patch: Record<string, any> = { lead_at: order.lead_at ?? new Date().toISOString() };
+  if (contact) Object.assign(patch, contact, { recipient: contact.name });
+  if (step !== "contact") {
+    const pickup = b.delivery === "retirada";
+    if (pickup && !c.pickup.enabled) throw new HttpError(400, "A retirada não está disponível no momento.");
+    if (order.payment_status === "paid" && order.shipping_cents > 0 && !pickup && digits(b.cep) !== order.cep) {
+      throw new HttpError(400, "O frete já foi pago para outro CEP. Fale com a gente pelo WhatsApp para mudar.");
     }
+    const a = {
+      cep: pickup ? null : digits(b.cep),
+      street: pickup ? null : clean(b.street, 160),
+      number: pickup ? null : clean(b.number, 20),
+      complement: pickup ? null : clean(b.complement, 80) || null,
+      district: pickup ? null : clean(b.district, 100),
+      city: pickup ? null : clean(b.city, 100),
+      state: pickup ? null : clean(b.state, 2).toUpperCase(),
+    };
+    if (!pickup) {
+      if ((a.cep ?? "").length !== 8) throw new HttpError(400, "Confira o CEP (8 números).");
+      if (!a.street) throw new HttpError(400, "Digite o nome da rua.");
+      if (!a.number) throw new HttpError(400, "Digite o número (ou S/N).");
+      if (!a.district) throw new HttpError(400, "Digite o bairro.");
+      if (!a.city) throw new HttpError(400, "Digite a cidade.");
+      if (!/^[A-Z]{2}$/.test(a.state ?? "")) throw new HttpError(400, "Escolha o estado.");
+      try {
+        checkRegion(c.shipping, a.cep as string, order.payment_status !== "paid");
+      } catch (err) {
+        throw new HttpError(400, (err as Error).message);
+      }
+    }
+    Object.assign(patch, a, { delivery_method: pickup ? "retirada" : "correios" });
+    if (!contact) patch.recipient = order.recipient || order.name;
   }
-  const first = !order.lead_at;
-  const { data: saved, error } = await db.from("pn_orders").update({
-    name, email, whatsapp, recipient: name, ...a,
-    delivery_method: pickup ? "retirada" : "correios",
-    lead_at: order.lead_at ?? new Date().toISOString(),
-  }).eq("id", order.id).select("*").single();
+  const { data: saved, error } = await db.from("pn_orders").update(patch).eq("id", order.id).select("*").single();
   if (error || !saved) throw new HttpError(500, "Não foi possível salvar. Tente de novo.");
-  if (first && saved.trial && saved.payment_status === "pending" && c.mail.apiKey && c.mail.from) {
-    const link = saved.site_url ? `${saved.site_url}criar.html?t=${saved.token}` : "";
-    const task = sendMail(c.mail, email, "A arte do seu pet está aqui 🐾", mailLayout(c.mail.brand, "Guardamos o teste do seu pet 🎄", [
-      `Olá, ${esc(name.split(" ")[0])}! A arte do seu pet fica guardada para você.`,
-      "Quando quiser, volte pelo botão abaixo para ver o enfeite em 3D, criar outra versão ou fazer o pedido.",
-    ], link ? { text: "Ver o enfeite do meu pet", url: link } : undefined));
-    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(task); else await task;
-  }
   return json({ order: await orderView(saved) });
 }
 
@@ -960,6 +1011,7 @@ async function pay(b: Body) {
   if (order.payment_status === "paid") return json({ order: await orderView(order) });
   if (order.payment_status !== "pending" || !order.trial) throw new HttpError(409, "Este pedido não pode ser pago aqui.");
   if (!order.lead_at) throw new HttpError(400, "Preencha seus dados de entrega antes de pagar.");
+  if (order.delivery_method !== "retirada" && !order.cep) throw new HttpError(400, "Falta o endereço de entrega.");
   const c = cfg(await loadSettings());
   if (!order.is_test && !c.mpToken) throw new HttpError(503, "As vendas ainda não foram abertas. Volte em breve!");
   const ex = extrasOf(c, b.extras);

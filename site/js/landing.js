@@ -21,7 +21,7 @@
       const row = el.closest("[data-kit-row]");
       if (row) row.hidden = n > extras.length;
     });
-    if (extras.length) $("#hero-kit").textContent = `ou 2 por ${PN.money(kitTotal(1))} · Pix ou cartão`;
+    if (extras.length) $("#hero-kit").textContent = ` · 2 por ${PN.money(kitTotal(1))}`;
     $("#price-cards").replaceChildren(...Array.from({ length: extras.length + 1 }, (_, n) => {
       const card = document.createElement("div");
       card.className = "price-card" + (n === 1 ? " best" : "");
@@ -68,19 +68,18 @@
     PN.api("order", { token: saved }).then(({ order: o }) => {
       let text = "", go = "";
       const arts = o.generations.filter((g) => g.status === "done").length;
+      // Só avisa do que falta fazer (pedido concluído fica no botão "Meu pedido").
       if (o.trial && o.payment_status === "pending") {
         if (!arts) return;
-        text = o.lead ? "A arte do seu pet está pronta" : "Sua arte ficou pronta";
-        go = o.lead ? "Ver e pedir" : "Ver";
-      } else if (o.payment_status === "pending") { text = "Falta pagar o pedido"; go = "Pagar"; }
-      else if (o.payment_status === "paid" && !o.confirmed) {
-        text = o.generations.length ? "Pedido não finalizado" : "Falta enviar a foto";
-        go = o.generations.length ? "Continuar" : "Enviar a foto";
-      } else if (o.payment_status === "paid") { text = "Pedido confirmado"; go = "Acompanhar"; }
+        text = "A arte do seu pet está pronta";
+        go = "Ver";
+      } else if (o.payment_status === "paid" && !o.confirmed) {
+        text = o.generations.length ? "Falta finalizar o pedido" : "Falta enviar a foto";
+        go = "Continuar";
+      }
       if (!text) return;
       $("#resume-text").textContent = text;
       $("#resume-go").textContent = go + " →";
-      if (!o.trial && o.payment_status === "pending" && o.pay_url) $("#resume-go").href = o.pay_url;
       try { if (sessionStorage.getItem("pn_resume_x") === o.code) return; } catch (_) { /* modo privado */ }
       $("#resume").hidden = false;
       document.body.classList.add("has-resume");
@@ -125,10 +124,35 @@
     }
   }
 
+  // Vitrine do topo: a foto do pet e o enfeite pronto, trocando sozinhos.
+  const show = $("#h-show");
+  if (show) {
+    const slides = [...show.querySelectorAll(".h-slide")];
+    const dots = [...show.querySelectorAll(".h-dots button")];
+    let at = 0, timer = null;
+    const go = (i) => {
+      at = (i + slides.length) % slides.length;
+      slides.forEach((s, k) => s.classList.toggle("on", k === at));
+      dots.forEach((d, k) => d.classList.toggle("on", k === at));
+      $("#h-name").textContent = slides[at].dataset.name;
+    };
+    const play = () => { clearInterval(timer); if (!matchMedia("(prefers-reduced-motion: reduce)").matches) timer = setInterval(() => go(at + 1), 3200); };
+    dots.forEach((d, k) => d.addEventListener("click", () => { go(k); play(); }));
+    let x0 = null;
+    show.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+    show.addEventListener("touchend", (e) => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0;
+      x0 = null;
+      if (Math.abs(dx) > 40) { go(at + (dx < 0 ? 1 : -1)); play(); }
+    });
+    play();
+  }
+
   // Botão fixo no celular: aparece depois que o botão do topo sai da tela.
   const sticky = $("#sticky");
   let heroCta = true;
-  new IntersectionObserver(([en]) => { heroCta = en.isIntersecting; update(); }).observe($(".try-cta"));
+  new IntersectionObserver(([en]) => { heroCta = en.isIntersecting; update(); }).observe($("#h-cta"));
   function update() { sticky.classList.toggle("show", !heroCta && window.scrollY > 300); }
   window.addEventListener("scroll", update, { passive: true });
 })();

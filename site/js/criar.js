@@ -28,7 +28,8 @@
     returnedPay: params.has("pago"),        // voltou do Mercado Pago
     payFailed: params.get("pagamento") === "falhou",
     fresh: params.has("novo"),               // "Testar grátis" / "Fazer outro pedido"
-    leadPrompted: false,
+    sheetMode: null,
+    sheetAddrDone: false,
     chooseLater: false,                      // pagar sem arte escolhida (cria mais artes depois)
     buyQty: 0,
     buyKind: "copia",
@@ -141,7 +142,9 @@
     try {
       const out = await PN.api("order", { token: state.token });
       // "Novo teste" com um pedido já concluído neste aparelho: começa outro.
-      if (state.fresh && (out.order.confirmed || out.order.payment_status === "refunded")) {
+      const oo = out.order;
+      const unfinished = (oo.trial && oo.payment_status === "pending") || (oo.payment_status === "paid" && !oo.confirmed);
+      if (state.fresh && !unfinished) {
         state.fresh = false;
         return startFresh();
       }
@@ -305,7 +308,7 @@
 
     const c = cur();
     const tr = trialing(o);
-    let autoChoose = null;   // escolhe a primeira arte sozinho, depois de terminar de desenhar a tela
+    let autoChoose = null;   // escolhe a arte sozinho depois de terminar de desenhar a tela
     // Geração que estávamos acompanhando terminou?
     if (state.watching && !busy) {
       const g = o.generations.find((x) => x.id === state.watching);
@@ -313,102 +316,108 @@
       stopBar();
       if (g && g.status === "failed") {
         state.mode = state.photo ? "preview" : "idle";
+        if (sheet.open && state.sheetMode === "gen") sheet.close();
         setError("#studio-error", "Não conseguimos criar a arte com essa foto. Sua tentativa foi devolvida — tente com outra foto, com o rosto do pet bem visível.");
       } else {
         state.mode = "idle";
         setError("#studio-error", "");
         if (tr && arts.length) autoChoose = arts[arts.length - 1].id;     // teste: mostra a arte nova
         else if (arts.length === 1 && !c.chosen_generation) autoChoose = arts[0].id;
+        setBar(100);
       }
       maybeShowTips();
     }
     if (busy) { state.mode = "working"; state.watching = busy.id; schedule(3000); startBar(); }
     else if (state.mode === "working" && !state.uploading) state.mode = "idle";
-    // Teste grátis: a arte pronta só aparece depois dos dados do cliente.
+    // Teste antigo sem dados do cliente: a arte pronta só aparece depois do nome/e-mail.
     const hiddenDone = tr && !o.lead && o.generations.some((g) => g.status === "done" && !g.url);
-    if (hiddenDone && !busy && !state.uploading) {
-      state.mode = "locked";
-      stopBar();
-      setBar(100);
-    } else if (state.mode === "locked") state.mode = "idle";
+    if (hiddenDone && !busy && !state.uploading) state.mode = "locked";
+    else if (state.mode === "locked") state.mode = "idle";
     if (tr && o.lead && arts.length && !c.chosen_generation && !busy && !autoChoose) autoChoose = arts[arts.length - 1].id;
 
-    // patinhas = tentativas
+    // patinhas = tentativas (no teste grátis o texto fica junto dos botões de outra versão)
     const paws = $("#paws");
     paws.innerHTML = "";
     for (let i = 0; i < c.credits_total; i++) {
-      const s = document.createElement("span");
-      s.className = "paw" + (i < c.credits_total - c.credits_left ? " used" : "");
-      s.textContent = "🐾";
-      paws.appendChild(s);
+      const sp = document.createElement("span");
+      sp.className = "paw" + (i < c.credits_total - c.credits_left ? " used" : "");
+      sp.textContent = "🐾";
+      paws.appendChild(sp);
     }
     const label = document.createElement("span");
     const used = c.credits_total - c.credits_left;
-    label.textContent = tr ? (c.credits_left === 0 ? "Seus testes grátis acabaram"
-        : c.credits_left === 1 && used ? "Resta 1 arte grátis"
-        : `Você pode criar ${c.credits_left} ${c.credits_left === 1 ? "arte" : "artes"} grátis`)
-      : c.credits_left === 0 ? "Você já criou todas as artes"
+    label.textContent = c.credits_left === 0 ? "Você já criou todas as artes"
       : c.credits_left === 1 ? "Resta 1 arte para criar"
       : (used ? "Restam " : "Você pode criar ") + c.credits_left + " artes";
     paws.appendChild(label);
+    paws.hidden = tr;
 
     $("#paid-banner").hidden = tr || !(state.item === 0 && !o.generations.length);
-    $("#trial-banner").hidden = true;
-    paws.hidden = tr && !o.generations.length;      // no começo do teste o subtítulo já explica
-    $("#studio-sub").hidden = !tr || o.generations.length > 0;
+    $("#paid-code").textContent = o.code;
     const prog = $("#studio-progress").children;
     (tr ? ["1. Foto", "2. Sua arte", "3. Pedido"] : ["1. Foto", "2. Escolher", "3. Finalizar"]).forEach((t, i) => { prog[i].textContent = t; });
-    $("#paid-code").textContent = o.code;
-
-    const piece = state.item ? `Enfeite ${state.item + 1}: ` : "";
-    $("#studio-title").textContent = piece + (arts.length ? "escolha a arte preferida" : state.item ? "envie a foto do outro pet" : "Envie a foto do seu pet");
-    if (!state.item) $("#studio-title").textContent = arts.length ? (tr ? "Assim fica o enfeite do seu pet 🎄" : "Escolha a arte preferida")
-      : state.mode === "locked" ? "Sua arte ficou pronta! 🎉" : state.mode === "working" ? "Desenhando o seu pet ✏️"
-      : tr ? "Teste grátis: envie a foto do seu pet" : "Envie a foto do seu pet";
-    $("#back-extras").hidden = !state.item;
     $("#prog-2").classList.toggle("on", arts.length > 0);
-
-    // artes
-    $("#arts-block").hidden = arts.length === 0;
-    const grid = $("#arts");
-    grid.innerHTML = "";
-    arts.forEach((g, i) => {
-      const card = document.createElement("div");
-      const isChosen = g.id === c.chosen_generation;
-      card.className = "art-card" + (isChosen ? " chosen" : "");
-      const img = document.createElement("img");
-      img.src = g.url;
-      img.alt = "Arte " + (i + 1) + " do seu pet";
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn sm " + (isChosen ? "green" : "ghost");
-      b.textContent = isChosen ? "✓ Escolhida" : "Escolher";
-      b.addEventListener("click", () => choose(g.id));
-      img.addEventListener("click", () => choose(g.id));
-      card.append(img, b);
-      grid.appendChild(card);
-    });
 
     const noArts = arts.length === 0;
     const picking = state.mode === "pick" || (noArts && state.mode === "idle");
     const previewing = state.mode === "preview" || state.mode === "working" || state.mode === "locked";
+    const askContact = tr && !o.lead && (state.mode === "preview" || state.mode === "locked");
+
+    // título e subtítulo
+    let title, sub = "";
+    if (state.item) title = `Enfeite ${state.item + 1}: ` + (arts.length ? "escolha a arte preferida" : "envie a foto do outro pet");
+    else if (tr) {
+      title = arts.length && state.mode === "idle" ? "Ficou assim! 🎄"
+        : state.mode === "locked" ? "Sua arte ficou pronta! 🎉"
+        : state.mode === "working" ? "Desenhando o seu pet ✏️"
+        : state.mode === "preview" ? "Foto escolhida ✓"
+        : "Vamos criar o enfeite do seu pet";
+      sub = arts.length && state.mode === "idle" ? "Gire o enfeite com o dedo para ver de todos os lados."
+        : askContact ? "" : picking && noArts ? "É grátis e fica pronto em cerca de 1 minuto." : "";
+    } else title = arts.length ? "Escolha a arte preferida" : "Envie a foto do seu pet";
+    $("#studio-title").textContent = title;
+    $("#studio-sub").textContent = sub;
+    $("#studio-sub").hidden = !sub;
+    $("#back-extras").hidden = !state.item;
+
+    // versões: só aparecem quando há mais de uma
+    $("#arts-block").hidden = arts.length < 2;
+    $("#arts-title").textContent = tr ? "Escolha a versão" : "Suas artes";
+    $("#arts").replaceChildren(...arts.map((g, i) => {
+      const card = document.createElement("button");
+      card.type = "button";
+      const isChosen = g.id === c.chosen_generation;
+      card.className = "art-card" + (isChosen ? " chosen" : "");
+      card.setAttribute("aria-pressed", isChosen ? "true" : "false");
+      card.setAttribute("aria-label", "Versão " + (i + 1));
+      const img = document.createElement("img");
+      img.src = g.url;
+      img.alt = "";
+      img.draggable = false;
+      const tag = document.createElement("span");
+      tag.className = "art-num";
+      tag.textContent = isChosen ? "✓ Versão " + (i + 1) : "Versão " + (i + 1);
+      card.append(img, tag);
+      card.addEventListener("click", () => choose(g.id));
+      return card;
+    }));
+
     $("#pick-block").hidden = !picking;
     $("#cancel-pick").hidden = noArts;
     $("#preview-block").hidden = !previewing;
-    $("#working").hidden = state.mode !== "working";
-    $("#preview-actions").hidden = state.mode !== "preview";
-    $("#preview-img").src = state.photoUrl || "img/favicon.svg";
-    const waitingLead = tr && !o.lead && (state.mode === "working" || state.mode === "locked");
-    $("#locked-block").hidden = !waitingLead;
-    $("#locked-text").textContent = state.mode === "locked" ? "✨ Falta só preencher seus dados para ver a arte e o enfeite em 3D."
-      : "Enquanto desenhamos, preencha seus dados para ver o resultado assim que ficar pronto.";
-    $("#locked-go").textContent = state.mode === "locked" ? "✨ Ver a arte do meu pet" : "📝 Preencher meus dados";
-    if (state.mode === "locked" && !state.leadPrompted && !$("#lead").open) openLead();
-    if ($("#lead").open) updateLeadTop();
+    $("#working").hidden = state.mode !== "working" || tr;
+    $("#change").hidden = state.mode !== "preview";
+    $("#preview-img").src = state.photoUrl || (o.generations.length ? "img/favicon.svg" : "img/favicon.svg");
+    $("#preview-block").classList.toggle("no-photo", !state.photoUrl);
+    $("#contact-form").hidden = !askContact;
+    $("#contact-title").textContent = state.mode === "locked" ? "Para quem mandamos a arte?" : "Para quem vamos mandar a arte?";
+    $("#preview-actions").hidden = !(state.mode === "preview" || state.mode === "locked");
+    $("#create").textContent = state.mode === "locked" ? "✨ Ver a arte do meu pet" : tr ? "✨ Criar minha arte grátis" : "✨ Criar minha arte";
     $("#next-block").hidden = noArts || state.mode !== "idle";
 
     const picked = chosenArt();
     $("#viewer-block").hidden = !picked || state.mode !== "idle";
+    $("#name-field").hidden = !picked;
     if (picked && state.mode === "idle") show3D(picked);
     const pn = $("#pet-name");
     if (document.activeElement !== pn) pn.value = nameOf(state.item);
@@ -421,27 +430,28 @@
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
     $("#drop").classList.toggle("locked", !state.species);
-    $("#drop-label").textContent = state.species ? "Toque para escolher a foto" : "Primeiro, escolha o tipo de pet acima";
+    $("#drop-label").textContent = state.species ? "Escolher a foto" : "Primeiro, escolha o tipo de pet";
 
     const go = $("#go-address");
     go.disabled = !c.chosen_generation;
     go.textContent = !c.chosen_generation ? "Escolha uma arte acima"
-      : tr ? `🛒 Quero este enfeite · ${PN.money(o.price_cents)}` : "Continuar com esta arte →";
+      : tr ? `🛒 Quero este · ${PN.money(o.price_cents)}` : "Continuar com esta arte →";
     const kits = o.extra_prices || [];
     $("#go-hint").hidden = !tr || !c.chosen_generation;
-    $("#go-hint").textContent = (kits.length ? `ou 2 por ${PN.money(o.price_cents + kits[0])} · ` : "") + "🚚 frete grátis para quase todo o Brasil";
+    $("#go-hint").textContent = (kits.length ? `ou 2 por ${PN.money(o.price_cents + kits[0])} · ` : "") + "🚚 frete grátis";
 
-    $("#again-block").hidden = false;
     $("#again-same").hidden = c.credits_left === 0 || !state.photo;
     $("#again-other").hidden = c.credits_left === 0;
-    $("#again-same").textContent = tr ? "🔁 Outra versão grátis, mesma foto" : "🔁 Nova arte, mesma foto";
+    $("#again-same").textContent = tr ? "🔁 Outra versão" : "🔁 Nova arte, mesma foto";
+    $("#again-other").textContent = tr ? "📷 Outra foto" : "📷 Usar outra foto";
     $("#again-text").textContent = tr
-      ? (c.credits_left === 0 ? "Seus testes grátis acabaram." : `Quer ver outra versão? ${c.credits_left === 1 ? "Resta 1 grátis" : "Restam " + c.credits_left + " grátis"}.`)
+      ? (c.credits_left === 0 ? "Seus testes grátis acabaram." : `Não curtiu? Teste de novo · ${c.credits_left === 1 ? "resta 1 grátis" : "restam " + c.credits_left + " grátis"}`)
       : c.credits_left === 0 ? "Você já criou todas as suas artes. Escolha a preferida para continuar." : "Quer ver outra opção?";
     const againBuy = $("#again-buy");
     againBuy.hidden = !(tr && c.credits_left === 0 && o.paid_credits > 0);
-    againBuy.textContent = `Não curtiu? Peça e crie mais ${o.paid_credits} artes depois de pagar`;
+    againBuy.textContent = `Peça e crie mais ${o.paid_credits} versões depois de pagar`;
     $("#none-liked").hidden = tr || c.credits_left !== 0;
+    if (sheet.open) updateSheet();
     if (autoChoose) choose(autoChoose);
   }
 
@@ -906,6 +916,23 @@
     if (!state.photo || state.mode === "working") return;
     if (!state.species) { setError("#studio-error", "Toque no tipo do seu pet: gato, cachorro, ave ou roedor."); return; }
     const tr = trialing(state.order);
+    // teste grátis: nome, WhatsApp e e-mail antes de gerar
+    let contact = null;
+    if (tr && !state.order.lead) {
+      contact = readContact();
+      if (!contact) return;
+    }
+    if (state.mode === "locked") {
+      // teste antigo: a arte já existe e só faltavam os dados
+      try {
+        const out = await PN.api("lead", { token: state.token, step: "contact", ...contact });
+        state.order = out.order;
+        PN.track("Lead");
+        state.mode = "idle";
+        renderStudio();
+      } catch (err) { setError("#studio-error", err.message); }
+      return;
+    }
     if (cur().credits_left === 1 && cur().credits_total > 1) {
       const go = await ask({ ico: "✨", img: state.photoUrl, title: tr ? "Esta é a sua última arte grátis" : "Esta é a sua última arte",
         text: tr ? "Depois dela, para criar mais é só fazer o pedido. Confira se esta é a foto certa." : "Depois dela não dá para criar outra. Confira se esta é a foto certa.",
@@ -915,25 +942,31 @@
     setError("#studio-error", "");
     state.mode = "working";
     state.uploading = true;
-    renderStudio();
     startBar(true);
+    if (tr) openSheet("gen");
+    renderStudio();
     try {
       if (!state.token) {
-        // Primeiro teste: o pedido nasce agora (ainda sem dados do cliente).
-        const t = await PN.api("trial-start", { site_url: location.href.split(/[?#]/)[0] });
+        // Primeiro teste: o pedido nasce agora, já com nome, WhatsApp e e-mail.
+        const t = await PN.api("trial-start", { site_url: location.href.split(/[?#]/)[0], ...contact });
         state.token = t.token;
         PN.setToken(t.token);
         try { localStorage.setItem(speciesKey(0), state.species); } catch (_) { /* modo privado */ }
-        PN.track("StartTrial");
+        PN.track("Lead");
+        state.order = Object.assign({}, state.order, { lead: true, contact });
+      } else if (contact) {
+        const out = await PN.api("lead", { token: state.token, step: "contact", ...contact });
+        state.order = out.order;
+        PN.track("Lead");
       }
       const out = await PN.upload(state.token, state.photo, state.species, state.item);
       state.watching = out.generation_id;
       state.uploading = false;
       schedule(2500);
-      if (tr && !state.order.lead) openLead();
     } catch (err) {
       state.uploading = false;
       stopBar();
+      if (sheet.open && state.sheetMode === "gen") sheet.close();
       state.mode = "preview";
       if (state.token) await load().catch(() => {});
       else renderStudio();
@@ -944,8 +977,7 @@
   // Barra de progresso (na foto e na janela de dados do teste grátis).
   function setBar(pct) {
     $("#bar").style.width = pct + "%";
-    $("#lead-bar").style.width = pct + "%";
-    $("#lead-pct").textContent = Math.round(pct) + "%";
+    $("#sheet-bar").style.width = pct + "%";
   }
   function startBar(reset) {
     const bar = $("#bar");
@@ -1112,128 +1144,192 @@
     }
   });
 
-  // ───────── teste grátis: dados do cliente (enquanto a arte é desenhada) ─────────
+  // ───────── teste grátis: contato (antes de gerar) ─────────
 
-  const leadDlg = $("#lead");
-  const ld = $("#lead-form");
-  const leadPickup = () => (ld.querySelector("input[name=delivery]:checked") || {}).value === "retirada";
+  const cf = $("#contact-form");
+  cf.whatsapp.addEventListener("input", (e) => { e.target.value = PN.maskPhone(e.target.value); });
+  cf.addEventListener("submit", (e) => { e.preventDefault(); create(); });
+  function readContact() {
+    const err = (msg, el) => { setError("#studio-error", msg); el.focus(); return null; };
+    const name = cf.name.value.trim(), whatsapp = cf.whatsapp.value, email = cf.email.value.trim();
+    if (name.length < 2) return err("Digite seu nome.", cf.name);
+    if (whatsapp.replace(/\D/g, "").length < 10) return err("Confira seu WhatsApp com DDD.", cf.whatsapp);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err("Confira seu e-mail.", cf.email);
+    setError("#studio-error", "");
+    try { localStorage.setItem("pn_contact", JSON.stringify({ name, whatsapp, email })); } catch (_) { /* modo privado */ }
+    return { name, whatsapp, email };
+  }
+  // Quem já testou neste aparelho não precisa digitar de novo.
+  try {
+    const saved = JSON.parse(localStorage.getItem("pn_contact") || "null");
+    if (saved) { cf.name.value = saved.name || ""; cf.whatsapp.value = saved.whatsapp || ""; cf.email.value = saved.email || ""; }
+  } catch (_) { /* modo privado */ }
 
-  function openLead() {
-    state.leadPrompted = true;
+  // ───────── teste grátis: tela da geração (entrega enquanto desenha) e edição dos dados ─────────
+
+  const sheet = $("#sheet");
+  const sf = $("#sheet-form");
+  const sheetPickup = () => (sf.querySelector("input[name=delivery]:checked") || {}).value === "retirada";
+  const TIPS = ["Olhando a foto com carinho…", "Desenhando as orelhinhas…", "Caprichando nos olhos…", "Escolhendo as cores dos filamentos…", "Montando o enfeite em 3D…", "Quase pronto…"];
+  let tipTimer = null;
+
+  function openSheet(mode) {
+    state.sheetMode = mode;
     const o = state.order || {};
+    state.sheetAddrDone = mode === "gen" && (!!o.address_set || !!state.addrSkipped);
     const ct = o.contact || {};
     const a = o.address || {};
-    if (!ld.dataset.filled) {
-      ld.dataset.filled = "1";
-      ld.name.value = ct.name || "";
-      ld.whatsapp.value = ct.whatsapp ? PN.maskPhone(ct.whatsapp) : "";
-      ld.email.value = ct.email || "";
-      ld.cep.value = a.cep ? PN.maskCep(a.cep) : "";
-      ld.street.value = a.street || "";
-      ld.number.value = a.number || "";
-      ld.complement.value = a.complement || "";
-      ld.district.value = a.district || "";
-      ld.city.value = a.city || "";
-      ld.state.value = a.state || "";
-      const pick = ld.querySelector(`input[name=delivery][value=${o.delivery_method === "retirada" ? "retirada" : "correios"}]`);
-      if (pick) pick.checked = true;
-    }
+    sf.name.value = ct.name || "";
+    sf.whatsapp.value = ct.whatsapp ? PN.maskPhone(ct.whatsapp) : "";
+    sf.email.value = ct.email || "";
+    sf.cep.value = a.cep ? PN.maskCep(a.cep) : "";
+    sf.street.value = a.street || "";
+    sf.number.value = a.number || "";
+    sf.complement.value = a.complement || "";
+    sf.district.value = a.district || "";
+    sf.city.value = a.city || "";
+    sf.state.value = a.state || "";
+    const pick = sf.querySelector(`input[name=delivery][value=${o.address_set && o.delivery_method === "retirada" ? "retirada" : "correios"}]`);
+    if (pick) pick.checked = true;
     const c = PN.publicConfig || {};
-    $("#lead-delivery").hidden = !c.pickup;
-    if (c.pickup) {
-      $("#lead-pickup-label").replaceChildren(document.createTextNode("Sem frete · " + c.pickup.name), document.createElement("br"), document.createTextNode(c.pickup.address));
+    $("#sheet-delivery").hidden = !c.pickup;
+    $("#sheet-pickup").textContent = c.pickup ? `Retirada sem frete em ${c.pickup.name} — ${c.pickup.address}. Avisamos pelo WhatsApp quando estiver pronto.` : "";
+    $("#sheet-head").hidden = mode !== "gen";
+    $("#sheet-x").hidden = mode === "gen";
+    $("#sheet-contact").hidden = mode !== "edit";
+    $("#sheet-title").textContent = mode === "gen" ? "Enquanto isso: onde você quer receber?" : "Seus dados de entrega";
+    $("#sheet-sub").textContent = mode === "gen" ? "Assim, se gostar, o pedido fica pronto em um toque." : "";
+    $("#sheet-sub").hidden = mode !== "gen";
+    $("#sheet-skip").parentElement.hidden = mode !== "gen";
+    $("#sheet-btn").textContent = mode === "gen" ? "Salvar endereço" : "Salvar";
+    $("#sheet-photo").src = state.photoUrl || "img/favicon.svg";
+    sheet.classList.toggle("edit", mode === "edit");
+    setError("#sheet-error", "");
+    addrLayout(!!a.street);
+    updateSheet();
+    if (!sheet.open) sheet.showModal();
+    clearInterval(tipTimer);
+    if (mode === "gen") {
+      let i = 0;
+      $("#sheet-tip").textContent = TIPS[0];
+      tipTimer = setInterval(() => { i = Math.min(TIPS.length - 1, i + 1); $("#sheet-tip").textContent = TIPS[i]; }, 7000);
     }
-    $("#lead-ship-label").textContent = c.shipping_mode === "incluso" ? "Frete grátis para todo o Brasil" : "Frete grátis para quase todo o Brasil";
-    $("#lead-addr").hidden = leadPickup();
-    setError("#lead-error", "");
-    updateLeadTop();
-    if (!leadDlg.open) leadDlg.showModal();
   }
 
-  function updateLeadTop() {
+  // Endereço: com o CEP achado mostra só um resumo + número; sem ele, todos os campos.
+  function addrLayout(found) {
+    const pickup = sheetPickup();
+    $("#sheet-addr").hidden = pickup;
+    $("#sheet-pickup").hidden = !pickup;
+    const hasCep = sf.cep.value.replace(/\D/g, "").length === 8;
+    $("#sheet-full").hidden = !hasCep || found;
+    $("#sheet-num").hidden = !hasCep;
+    const f = $("#sheet-found");
+    f.hidden = !found;
+    if (found) {
+      f.replaceChildren(document.createTextNode(`📍 ${sf.street.value}, ${sf.district.value} · ${sf.city.value}/${sf.state.value} `));
+      const ed = document.createElement("button");
+      ed.type = "button";
+      ed.className = "linklike";
+      ed.textContent = "editar";
+      ed.addEventListener("click", () => addrLayout(false));
+      f.appendChild(ed);
+    }
+  }
+
+  function updateSheet() {
+    if (state.sheetMode !== "gen") return;
     const o = state.order || {};
-    const editing = !!o.lead;
-    $("#lead-top").hidden = editing;
-    $("#lead-title").textContent = editing ? "Seus dados de entrega" : "Enquanto isso, seus dados";
-    $("#lead-sub").hidden = editing;
-    $("#lead-btn").textContent = editing ? "Salvar" : "Ver a arte do meu pet ✨";
-    if (editing) return;
-    const busy = state.uploading || (o.generations || []).some((g) => g.status === "processing");
-    const status = $("#lead-status");
-    if (busy) {
-      status.firstChild.textContent = "✏️ Desenhando o seu pet… ";
-      $("#lead-pct").hidden = false;
-    } else if (state.mode === "locked") {
-      status.firstChild.textContent = "✨ Sua arte ficou pronta! Termine aqui para ver. ";
-      $("#lead-pct").hidden = true;
-      setBar(100);
+    const busy = state.uploading || !!processing();
+    const ready = !busy && doneArts().length > 0;
+    $("#sheet-status").textContent = busy ? "Desenhando o seu pet…" : ready ? "✨ Sua arte ficou pronta!" : "Desenhando o seu pet…";
+    $("#sheet-tip").hidden = !busy;
+    $("#sheet-see").hidden = !ready;
+    sheet.classList.toggle("ready", ready);
+    $("#sheet-done").hidden = !state.sheetAddrDone;
+    $("#sheet-fields").hidden = state.sheetAddrDone;
+    sheet.classList.toggle("waiting", state.sheetAddrDone);
+    if (state.sheetAddrDone) {
+      const a = o.address || {};
+      $("#sheet-done-text").textContent = o.address_set
+        ? (o.delivery_method === "retirada" ? "Retirada em Cosmópolis." : `Entrega em ${a.street}, ${a.number} · ${a.city}/${a.state}.`)
+        : "Você informa o endereço na hora de pedir.";
     }
+    if (ready && state.sheetAddrDone) closeSheet();
   }
-
-  $("#lead-x").addEventListener("click", () => leadDlg.close());
-  $("#locked-go").addEventListener("click", openLead);
-  ld.whatsapp.addEventListener("input", (e) => { e.target.value = PN.maskPhone(e.target.value); });
-  ld.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => { $("#lead-addr").hidden = leadPickup(); }));
-  ld.cep.addEventListener("input", async (e) => {
+  function closeSheet() {
+    clearInterval(tipTimer);
+    if (sheet.open) sheet.close();
+    state.sheetMode = null;
+    window.scrollTo(0, 0);
+  }
+  $("#sheet-see").addEventListener("click", closeSheet);
+  $("#sheet-x").addEventListener("click", closeSheet);
+  sheet.addEventListener("cancel", (e) => { if (state.sheetMode === "gen" && (state.uploading || processing())) e.preventDefault(); else clearInterval(tipTimer); });
+  $("#sheet-skip").addEventListener("click", () => { state.addrSkipped = true; state.sheetAddrDone = true; updateSheet(); });
+  // na edição (sem a parte da geração), os campos sempre aparecem
+  sheet.addEventListener("close", () => { $("#sheet-fields").hidden = false; $("#sheet-done").hidden = true; sheet.classList.remove("waiting", "ready"); });
+  sf.whatsapp.addEventListener("input", (e) => { e.target.value = PN.maskPhone(e.target.value); });
+  sf.querySelectorAll("input[name=delivery]").forEach((r) => r.addEventListener("change", () => addrLayout(!!sf.street.value && sf.cep.value.replace(/\D/g, "").length === 8)));
+  sf.cep.addEventListener("input", async (e) => {
     e.target.value = PN.maskCep(e.target.value);
     const cep = e.target.value.replace(/\D/g, "");
-    const st = $("#lead-cep-status");
-    if (cep.length !== 8) { st.textContent = ""; return; }
-    st.textContent = "Buscando endereço…";
+    if (cep.length !== 8) { addrLayout(false); return; }
     try {
       const d = await (await fetch("https://viacep.com.br/ws/" + cep + "/json/")).json();
-      if (d.erro) throw new Error();
-      if (d.logradouro) ld.street.value = d.logradouro;
-      if (d.bairro) ld.district.value = d.bairro;
-      if (d.localidade) ld.city.value = d.localidade;
-      if (d.uf) ld.state.value = d.uf;
-      st.textContent = "Endereço encontrado ✓ Falta só o número.";
-      (ld.street.value ? ld.number : ld.street).focus();
+      if (d.erro || !d.logradouro) throw new Error();
+      sf.street.value = d.logradouro; sf.district.value = d.bairro || ""; sf.city.value = d.localidade || ""; sf.state.value = d.uf || "";
+      addrLayout(true);
     } catch (_) {
-      st.textContent = "Não achamos esse CEP. Preencha o endereço abaixo.";
+      addrLayout(false);
     }
+    sf.number.focus();
   });
 
-  ld.addEventListener("submit", async (e) => {
+  sf.addEventListener("submit", async (e) => {
     e.preventDefault();
-    setError("#lead-error", "");
-    const pickup = leadPickup();
-    const err = (msg, el) => { setError("#lead-error", msg); if (el) el.focus(); };
-    if (ld.name.value.trim().length < 3) return err("Digite seu nome.", ld.name);
-    if (ld.whatsapp.value.replace(/\D/g, "").length < 10) return err("Confira seu WhatsApp com DDD.", ld.whatsapp);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(ld.email.value.trim())) return err("Confira seu e-mail.", ld.email);
-    if (!pickup) {
-      if (ld.cep.value.replace(/\D/g, "").length !== 8) return err("Digite o CEP de entrega.", ld.cep);
-      if (!ld.street.value.trim()) return err("Digite o nome da rua.", ld.street);
-      if (!ld.number.value.trim()) return err("Digite o número (ou S/N).", ld.number);
-      if (!ld.district.value.trim()) return err("Digite o bairro.", ld.district);
-      if (!ld.city.value.trim()) return err("Digite a cidade.", ld.city);
-      if (!ld.state.value) return err("Escolha o estado.", ld.state);
+    setError("#sheet-error", "");
+    const edit = state.sheetMode === "edit";
+    const pickup = sheetPickup();
+    const err = (msg, el) => { setError("#sheet-error", msg); if (el) { if (el.closest("[hidden]")) addrLayout(false); el.focus(); } };
+    if (edit) {
+      if (sf.name.value.trim().length < 2) return err("Digite seu nome.", sf.name);
+      if (sf.whatsapp.value.replace(/\D/g, "").length < 10) return err("Confira seu WhatsApp com DDD.", sf.whatsapp);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(sf.email.value.trim())) return err("Confira seu e-mail.", sf.email);
     }
-    const btn = $("#lead-btn");
+    if (!pickup) {
+      if (sf.cep.value.replace(/\D/g, "").length !== 8) return err("Digite o CEP de entrega.", sf.cep);
+      if (!sf.street.value.trim()) return err("Digite o nome da rua.", sf.street);
+      if (!sf.number.value.trim()) return err("Digite o número (ou S/N).", sf.number);
+      if (!sf.district.value.trim()) return err("Digite o bairro.", sf.district);
+      if (!sf.city.value.trim()) return err("Digite a cidade.", sf.city);
+      if (!sf.state.value) return err("Escolha o estado.", sf.state);
+    }
+    const btn = $("#sheet-btn");
     const label = btn.textContent;
     btn.disabled = true;
     btn.textContent = "Salvando…";
-    const firstTime = !state.order.lead;
     try {
       const out = await PN.api("lead", {
-        token: state.token, name: ld.name.value, whatsapp: ld.whatsapp.value, email: ld.email.value,
-        delivery: pickup ? "retirada" : "correios", cep: ld.cep.value, street: ld.street.value, number: ld.number.value,
-        complement: ld.complement.value, district: ld.district.value, city: ld.city.value, state: ld.state.value,
+        token: state.token, step: edit ? undefined : "address",
+        name: sf.name.value, whatsapp: sf.whatsapp.value, email: sf.email.value,
+        delivery: pickup ? "retirada" : "correios", cep: sf.cep.value, street: sf.street.value, number: sf.number.value,
+        complement: sf.complement.value, district: sf.district.value, city: sf.city.value, state: sf.state.value,
       });
       state.order = out.order;
       state.buyQuote = null;
-      leadDlg.close();
-      if (firstTime) PN.track("Lead");
-      render();
-      if (state.step === "studio") window.scrollTo(0, 0);
+      if (edit) { closeSheet(); render(); }
+      else { state.sheetAddrDone = true; updateSheet(); }
     } catch (e2) {
-      setError("#lead-error", e2.message);
+      setError("#sheet-error", e2.message);
     } finally {
       btn.disabled = false;
       btn.textContent = label;
     }
   });
+
+  // A arte não sai fácil do site antes do pedido: sem "salvar imagem" no toque longo nem no botão direito.
+  document.addEventListener("contextmenu", (e) => { if (e.target.closest(".art-card, .buy-art, .mockup, .viewer, .extra-thumb, .ask")) e.preventDefault(); });
 
   // ───────── teste grátis: fechar o pedido ─────────
 
@@ -1244,7 +1340,7 @@
     show("buy");
     const art = state.chooseLater ? null : genById(o.chosen_generation);
     if (!art && !state.chooseLater) { state.step = "studio"; return renderStudio(); }
-    if (!o.lead) { state.step = "studio"; renderStudio(); return openLead(); }
+    if (!o.lead) { state.step = "studio"; return renderStudio(); }
     if (state.payFailed) { state.payFailed = false; setError("#buy-error", "O pagamento não foi concluído. Confira e tente de novo."); }
     const last = o.generations.filter((g) => g.status === "done" && g.url).pop();
     $("#buy-art").src = art ? art.url : last ? last.url : "img/exemplo-4-arte.png";
@@ -1305,14 +1401,17 @@
     const pickup = o.delivery_method === "retirada";
     const a = o.address || {};
     const pk = (PN.publicConfig && PN.publicConfig.pickup) || {};
-    $("#buy-ship-title").textContent = pickup ? "Retirada" : "Entrega para " + ((o.contact || {}).name || "").split(" ")[0];
-    $("#buy-addr").textContent = pickup ? `${pk.name || ""} — ${pk.address || ""}`
+    const noAddr = !o.address_set;
+    $("#buy-ship-title").textContent = noAddr ? "Entrega" : pickup ? "Retirada" : "Entrega para " + ((o.contact || {}).name || "").split(" ")[0];
+    $("#buy-addr").textContent = noAddr ? "Falta informar o endereço." : pickup ? `${pk.name || ""} — ${pk.address || ""}`
       : `${a.street}, ${a.number}${a.complement ? " — " + a.complement : ""} · ${a.district} · ${a.city}/${a.state} · CEP ${PN.maskCep(a.cep || "")}`;
+    $("#buy-edit").textContent = noAddr ? "Adicionar" : "Alterar";
+    $(".buy-ship").classList.toggle("missing", noAddr);
     $("#buy-after").textContent = art && !(ex && state.buyKind === "novo")
       ? "🎄 Pagou, está feito: seu pedido vai direto para a produção e você recebe a confirmação por e-mail."
       : "📸 Depois do pagamento você volta direto para cá para criar as artes que faltam.";
     updateBuyTotals();
-    if (!pickup) requoteBuy();
+    if (!pickup && !noAddr) requoteBuy();
   }
 
   function updateBuyTotals() {
@@ -1320,17 +1419,18 @@
     const ex = state.buyQty;
     const pickup = o.delivery_method === "retirada";
     const items = o.price_cents + kitSum(ex);
-    $("#buy-row-items").textContent = ex ? `${ex + 1} enfeites` : "Enfeite personalizado";
+    $("#buy-row-items").textContent = ex ? `${ex + 1} enfeites` : "1 enfeite";
     $("#buy-items").textContent = PN.money(items);
     const q = state.buyQuote && state.buyQuote.qty === ex ? state.buyQuote : null;
+    const noAddr = !o.address_set;
     const ship = pickup ? 0 : q ? q.cents : null;
-    $("#buy-ship").textContent = pickup ? "Sem frete" : ship === null ? "calculando…" : ship ? PN.money(ship) : "Grátis 🎉";
-    $("#buy-ship-label").textContent = pickup ? "(retirada)" : q && q.days ? `(chega em ~${q.days} dias úteis depois de pronto)` : "";
+    $("#buy-ship").textContent = pickup ? "Sem frete" : noAddr ? "—" : ship === null ? "calculando…" : ship ? PN.money(ship) : "Grátis 🎉";
+    $("#buy-ship-label").textContent = pickup ? "(retirada)" : q && q.days ? `(~${q.days} dias úteis)` : "";
     $("#buy-total").textContent = ship === null ? "—" : PN.money(items + ship);
     const btn = $("#pay-btn");
     if (!btn.dataset.busy) {
-      btn.disabled = ship === null;
-      btn.textContent = ship === null ? "Calculando o frete…" : `Pagar ${PN.money(items + ship)}`;
+      btn.disabled = !noAddr && ship === null;
+      btn.textContent = noAddr ? "Informar o endereço" : ship === null ? "Calculando o frete…" : `Pagar ${PN.money(items + ship)}`;
     }
   }
 
@@ -1354,7 +1454,7 @@
   }
 
   document.querySelectorAll("[data-buy-kind]").forEach((b) => b.addEventListener("click", () => { state.buyKind = b.dataset.buyKind; renderBuy(); }));
-  $("#buy-edit").addEventListener("click", openLead);
+  $("#buy-edit").addEventListener("click", () => openSheet("edit"));
   $("#buy-change").addEventListener("click", () => { state.step = "studio"; state.chooseLater = false; render(); window.scrollTo(0, 0); });
   $("#buy-back").addEventListener("click", () => { state.step = "studio"; state.chooseLater = false; render(); window.scrollTo(0, 0); });
   $("#again-buy").addEventListener("click", () => { state.chooseLater = true; state.step = "buy"; render(); window.scrollTo(0, 0); });
@@ -1363,6 +1463,7 @@
   $("#pay-btn").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     const o = state.order;
+    if (!o.address_set) return openSheet("edit");
     setError("#buy-error", "");
     const ex = state.buyQty;
     const names = [nameOf(0).trim()];
@@ -1424,7 +1525,7 @@
   function stepBack() {
     if ($("#ask").open) { $("#ask-cancel").click(); return true; }
     if ($("#onb").open) { $("#onb").close(); return true; }
-    if ($("#lead").open) { $("#lead").close(); return true; }
+    if (sheet.open) { if (state.sheetMode === "gen" && (state.uploading || processing())) return true; closeSheet(); return true; }
     const o = state.order;
     if (trialing(o) && state.step === "buy") { state.step = "studio"; render(); return true; }
     if (!o || !o.payment_status || !(o.payment_status === "paid" || trialing(o)) || (o.confirmed && state.step !== "address")) return false;

@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/studio.css">
 </head>
 <body>
   <div class="testbar" id="testbar" hidden>PEDIDO DE TESTE — não foi cobrado</div>
@@ -58,19 +59,15 @@
     <!-- passo 1 e 2: foto e artes -->
     <section id="view-studio" hidden>
       <ol class="progress" id="studio-progress"><li class="on">1. Foto</li><li id="prog-2">2. Escolher</li><li>3. Finalizar</li></ol>
-      <div class="card">
-        <p class="trial-banner" id="trial-banner" hidden>🎁 <b>Teste grátis</b> · veja como fica antes de pagar</p>
+      <div class="card studio-card">
+        <p class="trial-banner" id="trial-banner" hidden></p>
         <p class="paid-banner" id="paid-banner" hidden>✓ Pagamento confirmado · pedido <span id="paid-code"></span>
           <small>Faça com calma: se sair, é só voltar ao site e tocar em “Meu pedido”.</small></p>
         <h2 class="center" id="studio-title">Envie a foto do seu pet</h2>
-        <p class="center muted studio-sub" id="studio-sub" hidden>Em cerca de 1 minuto você vê a arte e o enfeite em 3D. Só paga se gostar.</p>
+        <p class="center muted studio-sub" id="studio-sub" hidden></p>
         <p class="paws" id="paws" aria-live="polite"></p>
         <p class="center" style="margin:-8px 0 14px"><button class="linklike" type="button" id="back-extras" hidden>← Voltar para os enfeites</button></p>
         <div class="alert error" id="studio-error" hidden role="alert"></div>
-
-        <div id="arts-block" hidden>
-          <div class="arts" id="arts"></div>
-        </div>
 
         <!-- tipo de pet: muda o jeito de desenhar (ex.: cor dos olhos dos gatos) -->
         <div id="species-block">
@@ -91,16 +88,12 @@
             <small>da galeria ou da câmera</small>
             <input type="file" id="file" accept="image/*" hidden>
           </label>
-          <div class="tips-row" aria-label="Como deve ser a foto">
-            <figure class="good"><img src="img/foto-boa.jpg" alt=""><figcaption>✓ De frente, com luz</figcaption></figure>
-            <figure class="bad"><img src="img/foto-ruim-costas.jpg" alt=""><figcaption>✕ De costas</figcaption></figure>
-            <figure class="bad"><img src="img/foto-ruim-escura.jpg" alt=""><figcaption>✕ Escura ou longe</figcaption></figure>
-          </div>
-          <p class="center" style="margin:10px 0 0"><button class="linklike" type="button" id="open-tips">📸 Mais dicas de foto</button></p>
+          <p class="photo-tips">✓ Rostinho de frente &nbsp;·&nbsp; ✓ Com luz &nbsp;·&nbsp; ✓ Só ele na foto
+            <button class="linklike" type="button" id="open-tips">Ver exemplos</button></p>
           <p class="center" style="margin:4px 0 0"><button class="linklike" type="button" id="cancel-pick" hidden>← Voltar para as artes</button></p>
         </div>
 
-        <!-- foto escolhida / criando -->
+        <!-- foto escolhida -->
         <div id="preview-block" hidden>
           <div class="preview">
             <img id="preview-img" alt="Foto escolhida do seu pet">
@@ -110,36 +103,45 @@
               <div class="bar"><i id="bar"></i></div>
               <small style="font:600 1rem var(--font-body)">Leva cerca de 1 minuto. Se sair, a arte continua sendo feita e aparece quando você voltar.</small>
             </div>
+            <button class="preview-change" type="button" id="change">Trocar foto</button>
           </div>
-          <div class="locked" id="locked-block" hidden>
-            <p id="locked-text"></p>
-            <button class="btn green block" type="button" id="locked-go">📝 Preencher meus dados</button>
-          </div>
-          <div id="preview-actions" class="again">
+          <!-- teste grátis: quem é (antes de gerar) -->
+          <form class="contact" id="contact-form" novalidate hidden>
+            <p class="contact-title" id="contact-title">Para quem vamos mandar a arte?</p>
+            <label class="field"><span>Seu nome</span><input name="name" autocomplete="name" maxlength="120" placeholder="Maria"></label>
+            <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="(11) 99999-8888"></label>
+            <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" maxlength="160" placeholder="maria@email.com"></label>
+            <p class="contact-note">🔒 Só para guardar a sua arte e te mandar o link. Nada de spam.</p>
+          </form>
+          <div id="preview-actions">
             <button class="btn block" id="create" type="button">✨ Criar minha arte</button>
-            <button class="btn ghost block sm" id="change" type="button">Trocar a foto</button>
           </div>
         </div>
 
         <!-- depois de ter artes -->
         <div id="next-block" hidden>
           <div class="viewer-block" id="viewer-block" hidden>
-            <h3>Assim fica o seu enfeite em 3D</h3>
             <div class="viewer" id="viewer"><div class="loading"><div class="spinner dark"></div>Montando a prévia…</div></div>
-            <p class="viewer-note" id="viewer-note">Arraste para girar. As cores já são as dos filamentos que usamos; a peça real tem relevo e pode variar um pouco de tom.</p>
-            <label class="field name-field"><span>✏️ Nome no verso <small>(opcional, até 16 letras)</small></span>
-              <input id="pet-name" maxlength="16" placeholder="Ex.: Mel" autocomplete="off"></label>
+            <p class="viewer-note" id="viewer-note">Arraste para girar. As cores são as dos filamentos que usamos.</p>
           </div>
-          <button class="btn green block" id="go-address" type="button" disabled>Escolha uma arte acima</button>
+          <div id="arts-block" hidden>
+            <p class="arts-title" id="arts-title">Escolha a versão</p>
+            <div class="arts" id="arts"></div>
+          </div>
+          <label class="field name-field" id="name-field"><span>✏️ Nome no verso <small>(opcional, até 16 letras)</small></span>
+            <input id="pet-name" maxlength="16" placeholder="Ex.: Mel" autocomplete="off"></label>
+          <button class="btn block buy-cta" id="go-address" type="button" disabled>Escolha uma arte acima</button>
           <p class="center small go-hint" id="go-hint" hidden></p>
           <div class="again" id="again-block">
-            <p class="center muted" style="margin:20px 0 0" id="again-text"></p>
-            <button class="btn block sm again-same" id="again-same" type="button">🔁 Nova arte, mesma foto</button>
-            <button class="btn block sm again-other" id="again-other" type="button">📷 Usar outra foto</button>
+            <p class="again-text" id="again-text"></p>
+            <div class="again-row">
+              <button class="btn ghost sm again-same" id="again-same" type="button">🔁 Outra versão</button>
+              <button class="btn ghost sm again-other" id="again-other" type="button">📷 Outra foto</button>
+            </div>
             <button class="btn ghost block sm" id="again-buy" type="button" hidden></button>
           </div>
           <p class="center none-liked" id="none-liked" hidden>Não gostou de nenhuma? <a data-support hidden target="_blank" rel="noopener">Fale com a gente no WhatsApp</a> antes de finalizar.</p>
-          <p class="center" style="margin:18px 0 0"><a class="linklike" data-support hidden target="_blank" rel="noopener">💬 Preciso de ajuda com as artes (WhatsApp)</a></p>
+          <p class="center" style="margin:16px 0 0"><a class="linklike small" data-support hidden target="_blank" rel="noopener">💬 Ajuda pelo WhatsApp</a></p>
         </div>
       </div>
     </section>
@@ -347,47 +349,58 @@
     </div>
   </dialog>
 
-  <!-- teste grátis: dados do cliente enquanto a arte é desenhada -->
-  <dialog id="lead" class="lead" aria-labelledby="lead-title">
-    <form id="lead-form" novalidate>
-      <button class="close" type="button" aria-label="Fechar" id="lead-x">×</button>
-      <div class="lead-top" id="lead-top">
-        <p class="lead-status" id="lead-status">✏️ Desenhando o seu pet… <b id="lead-pct"></b></p>
-        <div class="bar"><i id="lead-bar"></i></div>
+  <!-- teste grátis: tela da geração (com a entrega enquanto desenha) e edição dos dados -->
+  <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
+    <div class="sheet-head" id="sheet-head">
+      <div class="sheet-pet"><img id="sheet-photo" alt=""><span class="sheet-ring" aria-hidden="true"></span></div>
+      <p class="sheet-status" id="sheet-status">Desenhando o seu pet…</p>
+      <div class="sheet-bar"><i id="sheet-bar"></i></div>
+      <p class="sheet-tip" id="sheet-tip">Escolhendo as cores dos filamentos…</p>
+      <button class="btn sheet-see" type="button" id="sheet-see" hidden>✨ Ver a arte do meu pet</button>
+    </div>
+    <form class="sheet-body" id="sheet-form" novalidate>
+      <button class="sheet-x" type="button" aria-label="Fechar" id="sheet-x" hidden>×</button>
+      <div id="sheet-fields">
+      <h3 id="sheet-title">Enquanto isso: onde você quer receber?</h3>
+      <p class="sheet-sub" id="sheet-sub">Assim, se gostar, o pedido fica pronto em um toque.</p>
+      <div class="alert error" id="sheet-error" hidden role="alert"></div>
+      <div id="sheet-contact" hidden>
+        <label class="field"><span>Seu nome</span><input name="name" autocomplete="name" maxlength="120"></label>
+        <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national"></label>
+        <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" maxlength="160"></label>
       </div>
-      <h3 id="lead-title">Enquanto isso, seus dados</h3>
-      <p class="muted small" id="lead-sub">É para mostrar a arte e já deixar a entrega pronta. <b>Você não paga nada agora.</b></p>
-      <div class="alert error" id="lead-error" hidden role="alert"></div>
-      <label class="field"><span>Seu nome</span><input name="name" autocomplete="name" required maxlength="120" placeholder="Maria da Silva"></label>
-      <label class="field"><span>WhatsApp <small>(com DDD)</small></span><input name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="(11) 99999-8888"></label>
-      <label class="field"><span>E-mail</span><input name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="maria@email.com"></label>
-      <fieldset class="delivery" id="lead-delivery" hidden>
-        <legend>Como você quer receber?</legend>
-        <label class="choice"><input type="radio" name="delivery" value="correios" checked>
-          <span><b>📦 Receber em casa</b><small id="lead-ship-label">Frete grátis para quase todo o Brasil</small></span></label>
-        <label class="choice"><input type="radio" name="delivery" value="retirada">
-          <span><b>🏠 Retirar em Cosmópolis</b><small id="lead-pickup-label">Sem frete</small></span></label>
-      </fieldset>
-      <div id="lead-addr">
+      <div class="seg" id="sheet-delivery" role="radiogroup" aria-label="Como você quer receber" hidden>
+        <label><input type="radio" name="delivery" value="correios" checked><span>📦 Em casa</span></label>
+        <label><input type="radio" name="delivery" value="retirada"><span>🏠 Retirar</span></label>
+      </div>
+      <p class="sheet-pickup" id="sheet-pickup" hidden></p>
+      <div id="sheet-addr">
         <label class="field"><span>CEP</span><input name="cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000"></label>
-        <p class="small muted" id="lead-cep-status" style="margin:-10px 0 14px" aria-live="polite"></p>
-        <label class="field"><span>Rua</span><input name="street" autocomplete="address-line1" maxlength="160"></label>
-        <div class="row-num">
+        <p class="sheet-found" id="sheet-found" hidden></p>
+        <div id="sheet-full" hidden>
+          <label class="field"><span>Rua</span><input name="street" autocomplete="address-line1" maxlength="160"></label>
+          <label class="field"><span>Bairro</span><input name="district" maxlength="100"></label>
+          <div class="row2">
+            <label class="field"><span>Cidade</span><input name="city" maxlength="100"></label>
+            <label class="field"><span>Estado</span>
+              <select name="state">
+                <option value="">UF</option>
+                <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option>
+              </select></label>
+          </div>
+        </div>
+        <div class="row-num" id="sheet-num" hidden>
           <label class="field"><span>Número</span><input name="number" inputmode="numeric" maxlength="20"></label>
           <label class="field"><span>Complemento <small>(opcional)</small></span><input name="complement" maxlength="80" placeholder="Apto, bloco…"></label>
         </div>
-        <label class="field"><span>Bairro</span><input name="district" maxlength="100"></label>
-        <div class="row2">
-          <label class="field"><span>Cidade</span><input name="city" maxlength="100"></label>
-          <label class="field"><span>Estado</span>
-            <select name="state">
-              <option value="">UF</option>
-              <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option>
-            </select></label>
-        </div>
       </div>
-      <button class="btn green block" type="submit" id="lead-btn">Ver a arte do meu pet ✨</button>
-      <p class="small muted center" style="margin:10px 0 0">🔒 Seus dados ficam só com a gente, para o pedido e a entrega.</p>
+      <button class="btn green block" type="submit" id="sheet-btn">Salvar endereço</button>
+      <p class="center" style="margin:10px 0 0"><button class="linklike" type="button" id="sheet-skip">Preencher depois</button></p>
+      </div>
+      <div class="sheet-done" id="sheet-done" hidden>
+        <p><b>✓ Tudo certo!</b> <span id="sheet-done-text"></span></p>
+        <p class="muted small">Sua arte aparece aqui assim que ficar pronta.</p>
+      </div>
     </form>
   </dialog>
 

@@ -1,0 +1,89 @@
+/* Página inicial (feita para o celular primeiro). Usa a base de style.css. */
+
+/* ── topo ── */
+.h-top { position: relative; z-index: 3; padding: 10px 0 0; }
+.h-top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.h-top .brand { font-size: 1.18rem; gap: 8px; }
+.h-top .brand img { width: 32px; height: 32px; }
+.h-mine { flex: none; padding: 9px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; color: var(--pine-deep); font: 800 .9rem var(--font-body); cursor: pointer; }
+.h-mine:hover { border-color: var(--pine); }
+
+/* ── hero ── */
+.h-hero { position: relative; overflow: hidden; padding: 30px 0 34px; }
+.h-garland { position: absolute; top: -4px; left: 0; right: 0; height: 46px; background: url("../img/guirlanda.svg") repeat-x 0 0 / auto 100%; pointer-events: none; z-index: 2; }
+.h-grid { display: grid; gap: 22px; }
+
+.h-show { position: relative; }
+/* vitrine: a foto (círculo, à esquerda) e o enfeite pronto (cartão, à direita) */
+.h-frame { position: relative; aspect-ratio: 20 / 17; }
+.h-slide { position: absolute; inset: 0; margin: 0; opacity: 0; transition: opacity .8s ease; }
+.h-slide.on { opacity: 1; }
+.h-orn { position: absolute; right: 0; top: 0; width: 68%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 24px; display: block;
+  box-shadow: 0 2px 4px rgba(31, 42, 36, .06), 0 22px 46px rgba(31, 42, 36, .18); }
+.h-pet { position: absolute; left: 0; top: 34%; width: 40%; aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: 5px solid #fff; box-shadow: 0 12px 28px rgba(0, 0, 0, .22); }
+.h-slide.on .h-pet { animation: h-pop .7s cubic-bezier(.2, .9, .3, 1.3); }
+.h-slide.on .h-orn { animation: h-in .8s ease; }
+@keyframes h-pop { from { transform: scale(.6); opacity: 0; } }
+@keyframes h-in { from { transform: translateY(8px); } }
+.h-tag { position: absolute; z-index: 2; padding: 5px 11px; border-radius: 999px; background: #fff; color: var(--pine-deep); font: 800 .8rem/1.2 var(--font-body); box-shadow: 0 4px 14px rgba(0, 0, 0, .12); white-space: nowrap; }
+.h-tag-photo { left: 4%; top: calc(34% - 34px); }
+.h-tag-orn { right: 10px; bottom: 12px; }
+.h-tag-orn b { color: var(--berry); }
+.h-arrow { position: absolute; z-index: 2; left: 25%; top: 14%; width: 15%; color: var(--berry); transform: rotate(-6deg); }
+.h-dots { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+.h-dots button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 99px; background: #d9cdb8; cursor: pointer; transition: width .3s, background .3s; }
+.h-dots button.on { width: 26px; background: var(--pine); }
+
+.h-copy { text-align: center; }
+.h-kicker { display: none; margin: 0 0 8px; color: var(--pine); font: 900 .78rem var(--font-body); letter-spacing: .08em; text-transform: uppercase; }
+.h-copy h1 { margin: 0 0 12px; font: 600 clamp(2.1rem, 9vw, 3.7rem)/1.03 var(--font-title); letter-spacing: -.02em; color: var(--ink); }
+.h-copy h1 em { display: block; color: var(--berry); font-style: italic; }
+.h-lead { max-width: 31ch; margin: 0 auto 18px; color: var(--muted); font-size: 1.08rem; line-height: 1.45; }
+.h-lead b { color: var(--pine-deep); }
+.h-copy .notice { margin: 0 auto 14px; }
+.h-cta { width: 100%; max-width: 420px; min-height: 60px; font-size: 1.18rem; }
+.h-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; }
+.h-chips li { padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--pine-deep); font: 800 .82rem var(--font-body); white-space: nowrap; }
+.h-price { margin: 12px 0 0; color: var(--muted); font-weight: 700; font-size: .98rem; }
+.h-price b { color: var(--pine-deep); font-size: 1.08rem; }
+
+/* ── como funciona ── */
+.h-how { padding: var(--section) 0; background: var(--surface); border-block: 1px solid var(--line); }
+.narrow-how { max-width: 640px; }
+.h-how h2 { margin: 6px 0 0; }
+.h-steps { display: grid; gap: 10px; margin: 20px 0 24px; padding: 0; list-style: none; }
+.h-steps li { display: grid; grid-template-columns: 42px 1fr; gap: 14px; align-items: start; padding: 14px 16px; border-radius: 18px; background: var(--bg); }
+.h-steps li > span { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--pine); color: #fff; font: 900 1.1rem var(--font-body); }
+.h-steps b { display: block; color: var(--pine-deep); font-size: 1.05rem; line-height: 1.3; }
+.h-steps small { display: block; margin-top: 2px; color: var(--muted); font-size: .95rem; font-weight: 600; line-height: 1.4; }
+.h-cta-2 { min-width: min(300px, 100%); }
+
+/* ── produto ── */
+.h-product-media img { display: block; width: 100%; max-width: 460px; margin: 0 auto; border-radius: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, .3); }
+
+.home .sticky-cta .btn { font-size: 1.1rem; }
+
+/* ── telas maiores ── */
+@media (min-width: 900px) {
+  .h-top { padding-top: 16px; }
+  .h-top .brand { font-size: 1.35rem; }
+  .h-hero { padding: 64px 0 72px; }
+  .h-garland { height: 74px; }
+  .h-grid { grid-template-columns: 1fr 1.05fr; gap: 64px; align-items: center; }
+  .h-show { order: 2; }
+  .h-kicker { display: block; }
+  .h-copy { order: 1; text-align: left; }
+  .h-lead { margin-left: 0; font-size: 1.2rem; }
+  .h-copy .notice { margin-left: 0; }
+  .h-chips { justify-content: flex-start; }
+  .h-cta { width: auto; padding-inline: 38px; }
+}
+@media (max-width: 360px) {
+  .h-top .brand { font-size: 1.05rem; }
+  .h-mine { padding: 8px 11px; font-size: .85rem; }
+  .h-chips li { font-size: .76rem; padding: 5px 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .h-slide { transition: none; }
+  .h-slide.on .h-pet { animation: none; }
+}
