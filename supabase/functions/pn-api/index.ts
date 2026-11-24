@@ -441,9 +441,8 @@ async function orderView(order: any) {
     .select("position, kind, credits_total, credits_used, chosen_generation, pet_name").eq("order_id", o.id).order("position");
   // Teste grátis: a arte só aparece depois que o cliente informa os dados.
   const hidden = o.trial && !o.lead_at;
-  // Antes de pagar, o cliente vê só a prévia (menor); a arte original fica para a produção.
-  const unpaid = o.payment_status !== "paid";
-  const shown = (g: { result_path: string | null; preview_path: string | null }) => (unpaid && g.preview_path) || g.result_path || "";
+  // O cliente vê só a prévia (menor); a arte original fica para a produção (painel).
+  const shown = (g: { result_path: string | null; preview_path: string | null }) => g.preview_path || g.result_path || "";
   const urls = hidden ? {} : await signedUrls((gens ?? []).map(shown));
   const c = cfg(await loadSettings());
   const { count: upPending } = await db.from("pn_upsells").select("id", { count: "exact", head: true })
@@ -503,7 +502,7 @@ async function orderView(order: any) {
 
 // ───────────────────────── geração da arte ─────────────────────────
 
-// Prévia menor (≈512 px) da arte: é o que o cliente vê antes de pagar. A original fica para a produção.
+// Prévia menor (≈512 px) da arte: é o que o cliente vê no site. A original fica para a produção.
 function previewPng(png: Uint8Array): Uint8Array {
   const src = PNG.sync.read(Buffer.from(png));
   const f = Math.max(1, Math.round(src.width / 512));
@@ -626,11 +625,9 @@ async function publicConfig() {
 async function openArt(url: URL) {
   const id = url.searchParams.get("g");
   if (!isUuid(id)) throw new HttpError(404, "Arte não encontrada.");
-  const { data: gen } = await db.from("pn_generations").select("result_path, preview_path, pn_orders(payment_status)").eq("id", id).eq("status", "done").maybeSingle();
+  const { data: gen } = await db.from("pn_generations").select("result_path, preview_path").eq("id", id).eq("status", "done").maybeSingle();
   if (!gen?.result_path) throw new HttpError(404, "Arte não encontrada.");
-  // deno-lint-ignore no-explicit-any
-  const paid = (gen as any).pn_orders?.payment_status === "paid";
-  const { data } = await db.storage.from(BUCKET).createSignedUrl((!paid && gen.preview_path) || gen.result_path, 60 * 60);
+  const { data } = await db.storage.from(BUCKET).createSignedUrl(gen.preview_path || gen.result_path, 60 * 60);
   if (!data?.signedUrl) throw new HttpError(404, "Arte não encontrada.");
   return new Response(null, { status: 302, headers: { ...CORS, Location: data.signedUrl, "Cache-Control": "no-store" } });
 }
