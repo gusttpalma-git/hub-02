@@ -1649,11 +1649,12 @@ async function adminSavePartner(b: Body) {
     return await adminPartners();
   }
   // Código curto e fácil de ler: do nome da loja (sem "pet shop") ou o que o dono digitou.
-  const generic = /\b(PET\s*SHOP|PETSHOP|PET|SHOP|CLINICA|CLÍNICA|VETERINARIA|VETERINÁRIA|AGROPECUARIA|AGROPECUÁRIA|BANHO|TOSA|E|DE|DO|DA|DOS|DAS)\b/g;
+  // (NFD separa os acentos; partnerCode descarta o que não é A-Z/0-9)
+  const generic = /\b(PET\s*SHOP|PETSHOP|PET|SHOP|CLINICA|VETERINARIA|AGROPECUARIA|BANHO|TOSA|E|DE|DO|DA|DOS|DAS)\b/g;
   const wanted = partnerCode(b.code);
   if (b.code && wanted.length < 3) throw new HttpError(400, "O código precisa ter de 3 a 12 letras ou números.");
-  const fromName = partnerCode(name.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(generic, " ")).slice(0, 8);
-  const base = wanted || (fromName.length >= 3 ? fromName : partnerCode(name.normalize("NFD").replace(/[̀-ͯ]/g, "")).slice(0, 8)) || "LOJA";
+  const fromName = partnerCode(name.toUpperCase().normalize("NFD").replace(generic, " ")).slice(0, 10);
+  const base = wanted || (fromName.length >= 3 ? fromName : partnerCode(name.normalize("NFD")).slice(0, 10)) || "LOJA";
   for (let i = 0; i < 20; i++) {
     const code = i === 0 && base.length >= 3 ? base : base.slice(0, 8) + String(Math.floor(Math.random() * 90) + 10);
     const { error } = await db.from("pn_partners").insert({ ...row, code, secret: randomHex(16) });
