@@ -39,6 +39,17 @@
   // Pedido ainda em teste grátis (não pago)?
   const trialing = (o) => !!(o && o.trial && o.payment_status === "pending");
 
+  // Ponto de retirada do pedido: a loja parceira (quem veio pelo QR) ou o ponto padrão.
+  const pickupOf = (o) => (o && o.pickup) || (PN.publicConfig && PN.publicConfig.pickup) || {};
+  const partnerOf = (o) => (o && o.partner) || (PN.publicConfig && PN.publicConfig.partner) || null;
+  // "Pronto para retirar a partir de" (pula o domingo)
+  function readyDate(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + (days || 0));
+    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+  }
+
   // Antes de começar o teste ainda não existe pedido: a tela usa este "rascunho".
   function stubOrder() {
     const c = PN.publicConfig || {};
@@ -198,7 +209,7 @@
       lines.push("");
     });
     if (pickup) {
-      const p = (PN.publicConfig && PN.publicConfig.pickup) || {};
+      const p = pickupOf(o);
       lines.push("Retirada: " + [p.name, p.address].filter(Boolean).join(", "), "Quem retira: " + (a.recipient || o.name || ""));
     } else {
       lines.push("Entrega para: " + (a.recipient || ""),
@@ -438,7 +449,11 @@
       : tr ? `🛒 Quero este · ${PN.money(o.price_cents)}` : "Continuar com esta arte →";
     const kits = o.extra_prices || [];
     $("#go-hint").hidden = !tr || !c.chosen_generation;
-    $("#go-hint").textContent = (kits.length ? `ou 2 por ${PN.money(o.price_cents + kits[0])} · ` : "") + "🚚 frete grátis";
+    const pkGo = pickupOf(o);
+    $("#go-hint").textContent = (kits.length ? `ou 2 por ${PN.money(o.price_cents + kits[0])} · ` : "") +
+      (!partnerOf(o) || o.local_deal === false ? "🚚 frete grátis"
+        : o.address_set && o.delivery_method !== "retirada" ? "🛵 entrega em mãos na cidade"
+        : pkGo.partner ? `🏪 retire na ${pkGo.name} sem frete` : "🚚 frete grátis");
 
     $("#again-same").hidden = c.credits_left === 0 || !state.photo;
     $("#again-other").hidden = c.credits_left === 0;
@@ -649,9 +664,9 @@
     $("#recipient-label").textContent = pickup ? "Nome de quem vai retirar" : "Quem vai receber";
     $("#addr-fields").hidden = pickup;
     $("#addr-fields").querySelectorAll("input, select").forEach((el) => { el.disabled = pickup; });
-    const pk = (PN.publicConfig && PN.publicConfig.pickup) || null;
+    const pk = pickupOf(o);
     $("#pickup-box").hidden = !pickup;
-    if (pickup && pk) {
+    if (pickup && pk.name) {
       $("#pickup-place").textContent = pk.name + " — " + pk.address;
       $("#pickup-map").href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(pk.name + ", " + pk.address);
     }
@@ -733,9 +748,10 @@
     const br = () => document.createElement("br");
     const txt = (t) => document.createTextNode(t);
     if (pickup) {
-      const pk = (PN.publicConfig && PN.publicConfig.pickup) || {};
+      const pk = pickupOf(o);
+      const label = o.pickup_label || [pk.name, pk.address].filter(Boolean).join(" — ");
       title.textContent = "Retirada";
-      box.append(title, br(), txt(pk.name || ""), br(), txt(pk.address || ""), br(), txt("Quem retira: " + (a.recipient || "")));
+      box.append(title, br(), txt(label), br(), txt("Quem retira: " + (a.recipient || "")));
     } else {
       title.textContent = "Entrega para";
       box.append(title, br(), txt(a.recipient), br(),
@@ -1189,11 +1205,18 @@
     sf.district.value = a.district || "";
     sf.city.value = a.city || "";
     sf.state.value = a.state || "";
-    const pick = sf.querySelector(`input[name=delivery][value=${o.address_set && o.delivery_method === "retirada" ? "retirada" : "correios"}]`);
+    const pk = pickupOf(o);
+    const ptn = partnerOf(o);
+    const wantPickup = o.address_set ? o.delivery_method === "retirada" : !!(ptn && pk.partner);
+    const pick = sf.querySelector(`input[name=delivery][value=${wantPickup ? "retirada" : "correios"}]`);
     if (pick) pick.checked = true;
-    const c = PN.publicConfig || {};
-    $("#sheet-delivery").hidden = !c.pickup;
-    $("#sheet-pickup").textContent = c.pickup ? `Retirada sem frete em ${c.pickup.name} — ${c.pickup.address}. Avisamos pelo WhatsApp quando estiver pronto.` : "";
+    $("#sheet-delivery").hidden = !pk.name;
+    $("#sheet-opt-pickup").textContent = pk.partner ? "🏪 Retirar na loja" : "🏠 Retirar";
+    const days = (o.balcao || (PN.publicConfig && PN.publicConfig.partner) || {}).ready_days;
+    $("#sheet-pickup").textContent = pk.name
+      ? `Retirada sem frete em ${pk.name} — ${pk.address}${pk.hours ? " (" + pk.hours + ")" : ""}.` +
+        (pk.partner && days ? ` Fica pronto a partir de ${readyDate(days)}; avisamos pelo WhatsApp.` : " Avisamos pelo WhatsApp quando estiver pronto.")
+      : "";
     $("#sheet-head").hidden = mode !== "gen";
     $("#sheet-x").hidden = mode === "gen";
     $("#sheet-contact").hidden = mode !== "edit";
@@ -1252,7 +1275,7 @@
     if (state.sheetAddrDone) {
       const a = o.address || {};
       $("#sheet-done-text").textContent = o.address_set
-        ? (o.delivery_method === "retirada" ? "Retirada em Cosmópolis." : `Entrega em ${a.street}, ${a.number} · ${a.city}/${a.state}.`)
+        ? (o.delivery_method === "retirada" ? `Retirada em ${pickupOf(o).name || "Cosmópolis"}.` : `Entrega em ${a.street}, ${a.number} · ${a.city}/${a.state}.`)
         : "Você informa o endereço na hora de pedir.";
     }
     if (ready && state.sheetAddrDone) closeSheet();
@@ -1400,12 +1423,20 @@
     // entrega
     const pickup = o.delivery_method === "retirada";
     const a = o.address || {};
-    const pk = (PN.publicConfig && PN.publicConfig.pickup) || {};
+    const pk = pickupOf(o);
     const noAddr = !o.address_set;
     $("#buy-ship-title").textContent = noAddr ? "Entrega" : pickup ? "Retirada" : "Entrega para " + ((o.contact || {}).name || "").split(" ")[0];
     $("#buy-addr").textContent = noAddr ? "Falta informar o endereço." : pickup ? `${pk.name || ""} — ${pk.address || ""}`
       : `${a.street}, ${a.number}${a.complement ? " — " + a.complement : ""} · ${a.district} · ${a.city}/${a.state} · CEP ${PN.maskCep(a.cep || "")}`;
     $("#buy-edit").textContent = noAddr ? "Adicionar" : "Alterar";
+    // venda de balcão: quando fica pronto, ou quanto economiza retirando na loja
+    const bl = o.balcao;
+    const hint = $("#buy-local");
+    hint.hidden = !bl;
+    if (bl && pickup && pk.partner) hint.textContent = `🏪 Pronto para retirar a partir de ${readyDate(bl.ready_days)}. Avisamos no WhatsApp.`;
+    else if (bl && o.local_deal && !pickup && !noAddr) hint.textContent = "🛵 Entrega em mãos na sua cidade, feita por nós.";
+    else if (bl && !o.local_deal && !noAddr) hint.textContent = `💡 Retirando na ${pk.partner ? pk.name : "loja"}, o enfeite sai por ${PN.money(bl.price_cents)} e sem frete. Toque em Alterar.`;
+    else hint.hidden = true;
     $(".buy-ship").classList.toggle("missing", noAddr);
     $("#buy-after").textContent = art && !(ex && state.buyKind === "novo")
       ? "🎄 Pagou, está feito: seu pedido vai direto para a produção e você recebe a confirmação por e-mail."
@@ -1425,7 +1456,7 @@
     const noAddr = !o.address_set;
     const ship = pickup ? 0 : q ? q.cents : null;
     $("#buy-ship").textContent = pickup ? "Sem frete" : noAddr ? "—" : ship === null ? "calculando…" : ship ? PN.money(ship) : "Grátis 🎉";
-    $("#buy-ship-label").textContent = pickup ? "(retirada)" : q && q.days ? `(~${q.days} dias úteis)` : "";
+    $("#buy-ship-label").textContent = pickup ? "(retirada)" : q && q.local ? "(entrega em mãos)" : q && q.days ? `(~${q.days} dias úteis)` : "";
     $("#buy-total").textContent = ship === null ? "—" : PN.money(items + ship);
     const btn = $("#pay-btn");
     if (!btn.dataset.busy) {
@@ -1441,9 +1472,9 @@
     if (state.buyQuote && state.buyQuote.qty === ex) return;
     const seq = ++buySeq;
     try {
-      const q = await PN.api("quote", { cep: (o.address || {}).cep, extras: ex });
+      const q = await PN.api("quote", { cep: (o.address || {}).cep, extras: ex, token: state.token });
       if (seq !== buySeq) return;
-      state.buyQuote = { qty: ex, cents: q.shipping_cents || 0, days: q.days };
+      state.buyQuote = { qty: ex, cents: q.shipping_cents || 0, days: q.days, local: !!q.local };
       setError("#buy-error", "");
     } catch (err) {
       if (seq !== buySeq) return;

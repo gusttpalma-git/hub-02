@@ -33,6 +33,13 @@
     th { color: var(--muted); font-size: .85rem; }
     .how li { margin-bottom: 6px; }
     .ok { color: var(--pine); font-weight: 800; }
+    .pk { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+    .pk b { font-size: 1.05rem; }
+    .pk small { color: var(--muted); font-weight: 700; display: block; }
+    .pk .st { font-weight: 900; font-size: .85rem; border-radius: 99px; padding: 3px 10px; background: var(--line); white-space: nowrap; }
+    .pk .st.pronto { background: var(--pine); color: #fff; }
+    .pk .st.feito { background: var(--pine-soft); color: var(--pine-deep); }
+    .pk button { grid-column: 1 / -1; }
     .off { color: var(--berry); font-weight: 800; }
   </style>
 </head>
@@ -54,6 +61,12 @@
       </section>
 
       <section class="big" id="nums" aria-label="Resultados"></section>
+
+      <section class="card" id="pickup-card" hidden>
+        <h2 style="font-size:1.3rem;margin-top:0">🏪 Pedidos para retirar aqui</h2>
+        <p class="muted" style="margin-top:0" id="pickup-info"></p>
+        <div id="pickups"></div>
+      </section>
 
       <section class="card">
         <h2 style="font-size:1.3rem;margin-top:0">Seu QR Code e link</h2>
@@ -108,8 +121,37 @@
       return t;
     }
 
+    const STATUS = { aguardando: ["Em produção", ""], producao: ["Em produção", ""], enviado: ["Pronto — aguardando o cliente", "pronto"], entregue: ["Retirado ✓", "feito"] };
+    function renderPickups(d) {
+      const p = d.partner;
+      $("#pickup-card").hidden = !p.pickup;
+      if (!p.pickup) return;
+      $("#pickup-info").textContent = `Os clientes retiram aqui: ${p.address}${p.hours ? " (" + p.hours + ")" : ""}. Quando estiver pronto, a gente traz e avisa o cliente pelo WhatsApp. Na retirada, confira o nº do pedido e o nome e toque em "Retirado".`;
+      const list = d.pickups || [];
+      $("#pickups").replaceChildren(...(list.length ? list.map((o) => {
+        const row = el("div", undefined, "pk");
+        const info = el("div");
+        info.append(el("b", `${o.order} · ${o.customer}`), el("small", `${o.ornaments} enfeite${o.ornaments > 1 ? "s" : ""}${o.pet_name ? " · pet: " + o.pet_name : ""} · pago em ${date(o.paid_at)}`));
+        const [label, cls] = STATUS[o.status] || [o.status, ""];
+        row.append(info, el("span", label, "st " + cls));
+        if (o.status === "enviado") {
+          const b = el("button", "✅ Retirado pelo cliente", "btn ghost");
+          b.type = "button";
+          b.addEventListener("click", async () => {
+            if (!confirm(`Confirmar que ${o.customer} retirou o pedido ${o.order}?`)) return;
+            b.disabled = true;
+            try { const nd = await PN.api("partner-delivered", { k, order: o.id }); renderPickups(nd); }
+            catch (err) { alert(err.message); b.disabled = false; }
+          });
+          row.append(b);
+        }
+        return row;
+      }) : [el("p", "Nenhum pedido para retirar no momento.", "muted")]));
+    }
+
     PN.api("partner-view", { k }).then((d) => {
       const p = d.partner, s = d.stats;
+      renderPickups(d);
       $("#loading").hidden = true;
       $("#view").hidden = false;
       document.title = p.name + " — Patinha de Natal";

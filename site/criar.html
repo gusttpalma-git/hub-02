@@ -243,6 +243,7 @@
           <div><b id="buy-ship-title">Entrega</b><span id="buy-addr"></span></div>
           <button class="linklike" type="button" id="buy-edit">Alterar</button>
         </div>
+        <p class="buy-local" id="buy-local" hidden></p>
         <div class="totals" id="buy-totals">
           <div><span id="buy-row-items">Enfeite personalizado</span><span id="buy-items"></span></div>
           <div id="buy-row-ship"><span>Frete <small class="muted" id="buy-ship-label"></small></span><span id="buy-ship"></span></div>
@@ -371,7 +372,7 @@
       </div>
       <div class="seg" id="sheet-delivery" role="radiogroup" aria-label="Como você quer receber" hidden>
         <label><input type="radio" name="delivery" value="correios" checked><span>📦 Em casa</span></label>
-        <label><input type="radio" name="delivery" value="retirada"><span>🏠 Retirar</span></label>
+        <label><input type="radio" name="delivery" value="retirada"><span id="sheet-opt-pickup">🏠 Retirar</span></label>
       </div>
       <p class="sheet-pickup" id="sheet-pickup" hidden></p>
       <div id="sheet-addr">

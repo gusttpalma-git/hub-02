@@ -105,6 +105,7 @@
     const shortLink = link.replace(/^https?:\/\//, "").replace(/\/\?/, "/?");
     let price = "R$ 39,90";
     const freeShip = { v: true };
+    let pickupHere = false;
     document.getElementById("title").textContent = "Material de balcão" + (store ? " — " + store : "");
 
     // QR em SVG (nítido em qualquer tamanho de impressão)
@@ -128,14 +129,14 @@
         <div class="qrbox">${svg}</div>
         <p class="url">${esc(shortLink)}</p>
         <div class="steps"><div><b>1</b>Escaneie</div><div><b>2</b>Mande a foto do pet</div><div><b>3</b>Veja grátis o enfeite</div></div>
-        <p class="foot">Gostou? Enfeite impresso em 3D por <b class="js-price">${price}</b>${freeShip.v ? " · frete grátis" : ""}${store ? "<br>Indicado por <b>" + esc(store) + "</b>" : ""}</p>
+        <p class="foot">Gostou? Enfeite impresso em 3D por <b class="js-price">${price}</b>${pickupHere ? " · <b>retire aqui, sem frete</b>" : freeShip.v ? " · frete grátis" : ""}${store ? "<br>Indicado por <b>" + esc(store) + "</b>" : ""}</p>
       </div>`;
     }
     function cardv(svg) {
       return `<div class="cardv"><div>
         <h2>Seu pet virou <em>enfeite de Natal</em> 🎄</h2>
         <p>Aponte a câmera, mande a foto do pet e veja <b>grátis</b> como fica.</p>
-        <small>Enfeite 3D por <span class="js-price">${price}</span>${store ? " · " + esc(store) : ""}</small>
+        <small>Enfeite 3D por <span class="js-price">${price}</span>${pickupHere ? " · retire aqui" : ""}${store ? " · " + esc(store) : ""}</small>
       </div>${svg}</div>`;
     }
 
@@ -154,10 +155,11 @@
     render();
 
     // preço e frete atuais da loja
-    PN.ready.then((c) => {
-      if (!c) return;
-      price = PN.money(c.price_cents);
-      freeShip.v = c.shipping_mode === "incluso" || c.shipping_mode === "gratis_ate";
+    // preço de balcão da loja (quem vem pelo QR e retira na loja)
+    Promise.all([PN.ready, code ? PN.api("partner-hit", { code, count: false }).catch(() => ({})) : {}]).then(([c, info]) => {
+      if (c) freeShip.v = c.shipping_mode === "incluso" || c.shipping_mode === "gratis_ate";
+      if (info && info.price_cents) { price = PN.money(info.price_cents); pickupHere = !!info.pickup; }
+      else if (c) price = PN.money(c.price_cents);
       render();
     });
   })();

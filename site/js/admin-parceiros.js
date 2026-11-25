@@ -41,6 +41,7 @@
       `Tá tudo pronto para a parceria com a ${p.name}:\n` +
       `• O display com o QR Code fica no balcão. O cliente aponta a câmera, manda a foto do pet e vê na hora, de graça, o pet virando enfeite de Natal.\n` +
       `• Se ele comprar (agora ou em até 30 dias), vocês ganham ${String(p.commission_pct).replace(".", ",")}% do valor dos enfeites. Não precisa fazer nada no caixa.\n` +
+      (p.pickup && p.address ? `• O cliente retira o enfeite aí na loja, sem frete (mais movimento para vocês). Pela página abaixo vocês veem quem vem buscar e marcam "retirado".\n` : "") +
       `• Eu pago a comissão por Pix todo começo de mês.\n\n` +
       `Por esta página vocês acompanham testes, vendas e quanto têm a receber:\n${pageLink(p)}\n\n` +
       `Link de vocês (se quiserem postar no Instagram/WhatsApp): ${siteLink(p)}`;
@@ -55,6 +56,7 @@
     try {
       const out = await call("admin-partners", {});
       partners = out.partners || [];
+      if (out.local) fillLocal(out.local);
       loaded = true;
       render();
     } catch (err) {
@@ -104,6 +106,7 @@
         el("span", { class: "badge" }, String(p.commission_pct).replace(".", ",") + "%"),
         !p.active && el("span", { class: "badge aguardando" }, "pausada"),
       ),
+      el("p", { class: "meta" }, p.pickup && p.address ? "🏪 Ponto de retirada: " + p.address + (p.hours ? " (" + p.hours + ")" : "") : "Não é ponto de retirada"),
       el("p", { class: "meta" }, [p.contact_name, p.city, p.whatsapp && "WhatsApp " + p.whatsapp, p.pix_key ? "Pix: " + p.pix_key : "⚠️ sem chave Pix", p.notes].filter(Boolean).join(" · ")),
       el("div", { class: "nums" },
         num(p.hits || 0, "visitas"),
@@ -166,10 +169,55 @@
     $("#p-cancel").hidden = true;
     $("#p-active-wrap").hidden = true;
     $("#p-error").hidden = true;
+    syncPickup();
   }
+  function syncPickup() { $("#p-pickup-fields").hidden = !form.pickup.checked; }
+  form.pickup.addEventListener("change", syncPickup);
+
+  // ───────── preço de balcão ─────────
+  const lf = $("#local-form");
+  const brl = (c) => ((c || 0) / 100).toFixed(2).replace(".", ",");
+  const cents = (v) => Math.round(parseFloat(String(v).replace(/\./g, "").replace(",", ".")) * 100) || 0;
+  let localCfg = null;
+  function fillLocal(l) {
+    localCfg = l;
+    lf.price.value = brl(l.price_cents);
+    ["e0", "e1", "e2"].forEach((k, i) => { lf[k].value = brl(l.extra_prices[i]); });
+    lf.delivery.value = brl(l.delivery_cents);
+    lf.ceps.value = l.ceps;
+    lf.days.value = l.ready_days;
+    localPreview();
+  }
+  function localPreview() {
+    if (!localCfg) return;
+    const kits = (base, list, n) => { let t = base; const out = ["1 por " + money(t)]; for (let i = 0; i < n; i++) { t += list[i]; out.push(`${i + 2} por ${money(t)}`); } return out.join(" · "); };
+    const n = Math.min(3, localCfg.extra_max || 0);
+    $("#local-preview").textContent = "Balcão: " + kits(cents(lf.price.value), [cents(lf.e0.value), cents(lf.e1.value), cents(lf.e2.value)], n) +
+      "  |  Online (Correios): " + kits(localCfg.normal_price_cents, localCfg.normal_extra_prices, n);
+  }
+  lf.addEventListener("input", localPreview);
+  lf.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = $("#local-msg");
+    try {
+      await call("admin-save-settings", { local: {
+        price_cents: cents(lf.price.value), extra_prices: [cents(lf.e0.value), cents(lf.e1.value), cents(lf.e2.value)],
+        delivery_cents: cents(lf.delivery.value), ceps: lf.ceps.value, ready_days: lf.days.value,
+      } });
+      await load();
+      msg.textContent = "Preço de balcão salvo ✓";
+      msg.className = "alert ok";
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.className = "alert error";
+    }
+    msg.hidden = false;
+  });
   function edit(p) {
     form.id.value = p.id;
-    ["name", "contact_name", "pix_key", "city", "notes"].forEach((k) => { form[k].value = p[k] || ""; });
+    ["name", "contact_name", "pix_key", "city", "notes", "address", "hours"].forEach((k) => { form[k].value = p[k] || ""; });
+    form.pickup.checked = p.pickup !== false;
+    syncPickup();
     form.whatsapp.value = (p.whatsapp || "").replace(/^55/, "");
     form.code.value = p.code;
     form.code.disabled = true; // o código está impresso no QR: não muda
@@ -195,6 +243,7 @@
         name: form.name.value, code: form.id.value ? undefined : form.code.value || undefined,
         contact_name: form.contact_name.value, whatsapp: form.whatsapp.value, pix_key: form.pix_key.value,
         city: form.city.value, commission_pct: form.commission_pct.value, notes: form.notes.value,
+        pickup: form.pickup.checked, address: form.address.value, hours: form.hours.value,
         active: form.id.value ? form.active.checked : true,
       });
       partners = out.partners;

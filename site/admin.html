@@ -152,8 +152,13 @@
             <label class="field"><span>WhatsApp da loja</span><input name="whatsapp" inputmode="tel" maxlength="20" placeholder="(19) 99999-9999"></label>
             <label class="field"><span>Chave Pix (para a comissão)</span><input name="pix_key" maxlength="120"></label>
             <label class="field"><span>Cidade</span><input name="city" maxlength="80"></label>
-            <label class="field"><span>Comissão (%)</span><input name="commission_pct" inputmode="decimal" value="10" maxlength="5"></label>
+            <label class="field"><span>Comissão (%)</span><input name="commission_pct" inputmode="decimal" value="15" maxlength="5"></label>
             <label class="field"><span>Anotações</span><input name="notes" maxlength="500" placeholder="Ex.: falei com a Ana, display no caixa"></label>
+          </div>
+          <label class="switch"><input type="checkbox" name="pickup" checked> É ponto de retirada (o cliente retira o enfeite na loja, sem frete)</label>
+          <div class="p-grid" id="p-pickup-fields">
+            <label class="field"><span>Endereço da loja (para retirada)</span><input name="address" maxlength="200" placeholder="Rua, número — bairro, Cosmópolis"></label>
+            <label class="field"><span>Horário de retirada</span><input name="hours" maxlength="120" placeholder="Seg a sáb, 9h às 18h"></label>
           </div>
           <label class="switch" id="p-active-wrap" hidden><input type="checkbox" name="active" checked> Loja ativa (o link conta para ela)</label>
           <div class="alert error" id="p-error" hidden role="alert"></div>
@@ -163,6 +168,22 @@
           </div>
         </form>
       </div>
+      <form class="card p-new" id="local-form">
+        <h3>🏪 Preço de balcão</h3>
+        <p class="muted" style="margin-top:0">Vale para quem veio pelo QR de uma loja e <b>não usa Correios</b>: retira na loja (grátis) ou recebe em mãos na cidade. Quem pede Correios paga o preço normal com frete grátis.</p>
+        <div class="p-grid">
+          <label class="field"><span>1 enfeite (R$)</span><input name="price" inputmode="decimal"></label>
+          <label class="field"><span>2º enfeite (R$)</span><input name="e0" inputmode="decimal"></label>
+          <label class="field"><span>3º enfeite (R$)</span><input name="e1" inputmode="decimal"></label>
+          <label class="field"><span>4º enfeite (R$)</span><input name="e2" inputmode="decimal"></label>
+          <label class="field"><span>Entrega em mãos (R$)</span><input name="delivery" inputmode="decimal"></label>
+          <label class="field"><span>CEPs da entrega em mãos <small>(começo do CEP)</small></span><input name="ceps" placeholder="13150, 13165"></label>
+          <label class="field"><span>Pronto para retirar em (dias)</span><input name="days" inputmode="numeric" maxlength="2"></label>
+        </div>
+        <p class="muted small" id="local-preview"></p>
+        <div class="alert" id="local-msg" hidden></div>
+        <button class="btn green" type="submit">Salvar preço de balcão</button>
+      </form>
       <div id="p-list"></div>
       <details class="card p-help">
         <summary><b>💡 Como funciona e como pagar a comissão</b></summary>

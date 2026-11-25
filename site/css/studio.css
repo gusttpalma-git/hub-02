@@ -118,3 +118,7 @@ dialog.sheet::backdrop { background: rgba(18, 30, 24, .55); backdrop-filter: blu
 .sheet.waiting .sheet-status { font-size: 1.6rem; }
 .sheet-bar { width: min(280px, 100%); }
 .sheet.edit #sheet-title { margin-bottom: 14px; }
+
+/* venda de balcão (cliente que veio pela loja parceira) */
+.buy-local { margin: -4px 0 12px; padding: 10px 14px; border-radius: 14px; background: var(--pine-soft); color: var(--pine-deep); font-weight: 800; font-size: .92rem; }
+.buy-local[hidden] { display: none; }

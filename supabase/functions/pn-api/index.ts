@@ -201,6 +201,18 @@ function cfg(s: Settings) {
       from: s.email_from || "",
       brand: s.brand_name || "Patinha de Natal",
     },
+    // Venda de balcão (lojas parceiras): preço sem Correios, entrega em mãos na cidade e prazo de retirada.
+    local: {
+      priceCents: Math.max(100, parseInt(s.local_price_cents || "2990", 10) || 2990),
+      extraPrices: (() => {
+        const l = String(s.local_extra_prices_cents || "1500,1200,1200").split(",").map((v) => Math.max(0, parseInt(v, 10) || 0));
+        while (l.length < 3) l.push(l[l.length - 1] ?? 0);
+        return l.slice(0, 3);
+      })(),
+      ceps: String(s.local_ceps ?? "13150").split(/[\s,;]+/).map(digits).filter((v) => v.length >= 2 && v.length <= 8),
+      deliveryCents: Math.max(0, parseInt(s.local_delivery_cents ?? "500", 10) || 0),
+      readyDays: Math.min(30, Math.max(0, parseInt(s.pickup_days ?? "3", 10) || 0)),
+    },
     ownerEmail: s.owner_email || "",
     ntfyTopic: (s.ntfy_topic || "").trim(),
     pickup: {
@@ -337,7 +349,7 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
     ], button));
   } else if (event === "confirmed") {
     const pickup = order.delivery_method === "retirada";
-    const address = pickup ? `Retirada em ${esc(c.pickup.name)}<br>${esc(c.pickup.address)}` : `${esc(order.street)}, ${esc(order.number)}${order.complement ? " — " + esc(order.complement) : ""}<br>${esc(order.district)} · ${esc(order.city)}/${esc(order.state)} · CEP ${esc(order.cep)}`;
+    const address = pickup ? `Retirada em ${order.pickup_label ? esc(order.pickup_label) : esc(c.pickup.name) + "<br>" + esc(c.pickup.address)}` : `${esc(order.street)}, ${esc(order.number)}${order.complement ? " — " + esc(order.complement) : ""}<br>${esc(order.district)} · ${esc(order.city)}/${esc(order.state)} · CEP ${esc(order.cep)}`;
     await sendMail(c.mail, order.email, `Pedido ${order.code} confirmado`, mailLayout(c.mail.brand, "Seu enfeite vai para a produção 🐾", [
       `Olá, ${first}! Recebemos a arte escolhida e o endereço.`,
       `<strong>Entrega para:</strong><br>${esc(order.recipient)}<br>${address}`,
@@ -356,7 +368,7 @@ async function notify(event: "paid" | "confirmed" | "shipped", order: any, c: Re
   } else if (order.delivery_method === "retirada") {
     await sendMail(c.mail, order.email, `Seu enfeite está pronto para retirar — pedido ${order.code}`, mailLayout(c.mail.brand, "Pronto para retirar! 🎁", [
       `Olá, ${first}! O seu enfeite está pronto.`,
-      `<strong>Onde retirar:</strong> ${esc(c.pickup.name)}<br>${esc(c.pickup.address)}`,
+      `<strong>Onde retirar:</strong> ${order.pickup_label ? esc(order.pickup_label) : esc(c.pickup.name) + "<br>" + esc(c.pickup.address)}`,
       "Leve o código do pedido: " + esc(order.code) + ".",
     ], button));
   } else {
@@ -449,14 +461,17 @@ async function orderView(order: any) {
   const shown = (g: { result_path: string | null; preview_path: string | null }) => g.preview_path || g.result_path || "";
   const urls = hidden ? {} : await signedUrls((gens ?? []).map(shown));
   const c = cfg(await loadSettings());
+  const partner = o.partner_id ? await partnerById(o.partner_id) : null;
+  const local = isLocalDeal(c, o, partner);
+  const pl = priceList(c, local);
   const { count: upPending } = await db.from("pn_upsells").select("id", { count: "exact", head: true })
     .eq("order_id", o.id).eq("status", "pending").gt("created_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString());
   return {
     extras: o.extras,
     upsell: {
-      price_cents: c.extraPrices[Math.min(2, o.extras ?? 0)],
-      prices: c.extraPrices.slice(o.extras ?? 0, c.extraMax),
-      main_cents: c.priceCents,
+      price_cents: pl.extras[Math.min(2, o.extras ?? 0)],
+      prices: pl.extras.slice(o.extras ?? 0, c.extraMax),
+      main_cents: pl.price,
       max: Math.max(0, c.extraMax - (o.extras ?? 0)),
       pending: (upPending ?? 0) > 0,
     },
@@ -480,8 +495,18 @@ async function orderView(order: any) {
     lead: !!o.lead_at,
     contact: o.lead_at ? { name: o.name, email: o.email, whatsapp: o.whatsapp } : null,
     address_set: o.delivery_method === "retirada" || !!o.cep,
-    price_cents: c.priceCents,
-    extra_prices: c.extraMax > 0 ? c.extraPrices.slice(0, c.extraMax) : [],
+    price_cents: pl.price,
+    extra_prices: c.extraMax > 0 ? pl.extras.slice(0, c.extraMax) : [],
+    // loja parceira: ponto de retirada e preço de balcão (sem Correios)
+    partner: partner ? { name: partner.name } : null,
+    pickup: pickupFor(c, partner),
+    pickup_label: o.pickup_label,
+    local_deal: local,
+    balcao: partner ? {
+      price_cents: c.local.priceCents, extra_prices: c.extraMax > 0 ? c.local.extraPrices.slice(0, c.extraMax) : [],
+      normal_price_cents: c.priceCents, delivery_cents: c.local.deliveryCents, ready_days: c.local.readyDays,
+      local_cep: !!o.cep && isLocalCep(c, o.cep),
+    } : null,
     // artes que o cliente ganha ao pagar (além das que já usou no teste)
     paid_credits: o.payment_status === "pending" ? Math.max(0, c.credits - o.credits_total) : 0,
     chosen_generation: o.chosen_generation,
@@ -677,6 +702,12 @@ async function quote(b: Body) {
   const c = cfg(await loadSettings());
   const cep = digits(b.cep);
   if (cep.length !== 8) throw new HttpError(400, "Confira o CEP (8 números).");
+  if (b.token && isLocalCep(c, cep)) {
+    const order = await getOrderByToken(b.token).catch(() => null);
+    if (order?.partner_id) {
+      return json({ shipping_cents: c.local.deliveryCents, label: "Entrega em mãos", days: null, local: true });
+    }
+  }
   try {
     checkRegion(c.shipping, cep);
   } catch (err) {
@@ -976,7 +1007,7 @@ async function lead(b: Body) {
   if (contact) Object.assign(patch, contact, { recipient: contact.name });
   if (step !== "contact") {
     const pickup = b.delivery === "retirada";
-    if (pickup && !c.pickup.enabled) throw new HttpError(400, "A retirada não está disponível no momento.");
+    if (pickup && !pickupFor(c, order.partner_id ? await partnerById(order.partner_id) : null)) throw new HttpError(400, "A retirada não está disponível no momento.");
     if (order.payment_status === "paid" && order.shipping_cents > 0 && !pickup && digits(b.cep) !== order.cep) {
       throw new HttpError(400, "O frete já foi pago para outro CEP. Fale com a gente pelo WhatsApp para mudar.");
     }
@@ -1019,19 +1050,28 @@ async function pay(b: Body) {
   if (order.delivery_method !== "retirada" && !order.cep) throw new HttpError(400, "Falta o endereço de entrega.");
   const c = cfg(await loadSettings());
   if (!order.is_test && !c.mpToken) throw new HttpError(503, "As vendas ainda não foram abertas. Volte em breve!");
-  const ex = extrasOf(c, b.extras);
+  const partner = order.partner_id ? await partnerById(order.partner_id) : null;
+  const local = isLocalDeal(c, order, partner);
+  const pl = priceList(c, local);
+  const exN = pl.extras[0] > 0 ? Math.max(0, Math.min(c.extraMax, parseInt(String(b.extras ?? 0), 10) || 0)) : 0;
+  const ex = { n: exN, cents: pl.extras.slice(0, exN).reduce((a, v) => a + v, 0) };
   const kind = b.kind === "novo" ? "novo" : "copia";
   // "escolher depois": paga sem arte definida e ganha mais artes para criar depois do pagamento
   const later = b.choose_later === true || !order.chosen_generation;
   const pickup = order.delivery_method === "retirada";
-  let shipping: { cents: number; cost: number | null; label: string } = { cents: 0, cost: null, label: pickup ? "Retirada: " + c.pickup.name : "Frete grátis" };
+  const point = pickup ? pickupFor(c, partner) : null;
+  if (pickup && !point) throw new HttpError(400, "A retirada não está disponível no momento.");
+  let shipping: { cents: number; cost: number | null; label: string } = { cents: 0, cost: null, label: point ? "Retirada: " + point.name : "Frete grátis" };
   if (!pickup) {
     try {
       checkRegion(c.shipping, order.cep);
     } catch (err) {
       throw new HttpError(400, (err as Error).message);
     }
-    if (c.shipping.mode !== "incluso") {
+    if (partner && isLocalCep(c, order.cep)) {
+      // cliente da loja parceira na cidade: o dono entrega em mãos
+      shipping = { cents: c.local.deliveryCents, cost: null, label: `Entrega em mãos${order.city ? " — " + order.city : ""}` };
+    } else if (c.shipping.mode !== "incluso") {
       try {
         shipping = await shippingCharge(c, order.cep, ex.n);
       } catch (_) {
@@ -1039,7 +1079,7 @@ async function pay(b: Body) {
       }
     }
   }
-  const total = c.priceCents + ex.cents + shipping.cents;
+  const total = pl.price + ex.cents + shipping.cents;
   const names: unknown[] = Array.isArray(b.pet_names) ? b.pet_names : [];
 
   await db.from("pn_order_items").delete().eq("order_id", order.id);
@@ -1056,6 +1096,8 @@ async function pay(b: Body) {
     shipping_cents: shipping.cents, shipping_label: shipping.label, shipping_cost_cents: shipping.cost,
     pet_name: clean(names[0] ?? b.pet_name, 20) || null,
     customer_notes: clean(b.customer_notes, 500) || null,
+    local_deal: local,
+    pickup_label: point ? point.name + " — " + point.address + (point.hours ? " (" + point.hours + ")" : "") : null,
     ...(later ? { chosen_generation: null } : {}),
   }).eq("id", order.id).select("*").single();
   if (error || !o) throw new HttpError(500, "Não foi possível montar o pedido. Tente de novo.");
@@ -1077,8 +1119,8 @@ async function pay(b: Body) {
         description: `Pedido ${o.code}`,
         quantity: 1,
         currency_id: "BRL",
-        unit_price: c.priceCents / 100,
-      }, ...c.extraPrices.slice(0, ex.n).map((cents, i) => ({
+        unit_price: pl.price / 100,
+      }, ...pl.extras.slice(0, ex.n).map((cents, i) => ({
         id: "enfeite-adicional-" + (i + 2),
         title: `${i + 2}º enfeite` + (kind === "copia" ? " (igual)" : " (outro pet)"),
         quantity: 1,
@@ -1125,11 +1167,12 @@ async function addExtras(b: Body) {
   if (order.payment_status !== "paid") throw new HttpError(402, "O pagamento ainda não foi confirmado.");
   if (order.confirmed_at || order.production_status !== "aguardando") throw new HttpError(409, "Este pedido já foi finalizado. Fale com a gente pelo WhatsApp.");
   const c = cfg(await loadSettings());
-  const room = c.extraPrice > 0 ? c.extraMax - (order.extras ?? 0) : 0;
+  const list = order.local_deal ? c.local.extraPrices : c.extraPrices;
+  const room = list[0] > 0 ? c.extraMax - (order.extras ?? 0) : 0;
   const qty = parseInt(String(b.qty ?? 1), 10) || 0;
   if (room <= 0) throw new HttpError(400, "Este pedido já tem o máximo de enfeites.");
   if (!(qty >= 1 && qty <= room)) throw new HttpError(400, `Escolha de 1 a ${room} enfeite(s).`);
-  const amount = extrasCents(c, order.extras ?? 0, qty);
+  const amount = list.slice(order.extras ?? 0, (order.extras ?? 0) + qty).reduce((a, v) => a + v, 0);
   const kind = ["novo", "copia"].includes(b.kind) ? b.kind : null;
 
   const { data: up, error } = await db.from("pn_upsells").insert({ order_id: order.id, qty, amount_cents: amount, kind }).select("id").single();
@@ -1345,6 +1388,7 @@ async function adminOrders(b: Body) {
       extras: o.extras, extras_cents: o.extras_cents,
       partner: o.partner_id ? partnerName[o.partner_id] ?? "loja parceira" : null,
       partner_commission_cents: o.partner_commission_cents ?? null,
+      pickup_label: o.pickup_label ?? null, local_deal: !!o.local_deal,
       items: (allItems ?? []).filter((it) => it.order_id === o.id).map((it) => ({ position: it.position, kind: it.kind, chosen_generation: it.chosen_generation, pet_name: it.pet_name })),
       generations: (gens ?? []).filter((g) => g.order_id === o.id).map((g) => ({
         id: g.id, status: g.status, species: g.species, item: g.item ?? 0,
@@ -1494,6 +1538,34 @@ async function adminSaveSettings(b: Body) {
   if (typeof b.openai_image_quality === "string" && ["low", "medium", "high"].includes(b.openai_image_quality)) {
     await saveSetting("openai_image_quality", b.openai_image_quality);
   }
+  if (b.local && typeof b.local === "object") {
+    const L = b.local;
+    if (L.price_cents !== undefined) {
+      const v = parseInt(L.price_cents, 10);
+      if (!(v >= 100 && v <= 1000000)) throw new HttpError(400, "Preço de balcão inválido.");
+      await saveSetting("local_price_cents", String(v));
+    }
+    if (Array.isArray(L.extra_prices)) {
+      const l = L.extra_prices.slice(0, 3).map((v: unknown) => Math.round(Number(v) || 0));
+      if (l.some((v: number) => !(v === 0 || (v >= 100 && v <= 1000000)))) throw new HttpError(400, "Preço de balcão do enfeite a mais inválido.");
+      await saveSetting("local_extra_prices_cents", l.join(","));
+    }
+    if (typeof L.ceps === "string") {
+      const list = L.ceps.split(/[\s,;]+/).map(digits).filter(Boolean);
+      if (list.some((v: string) => v.length < 2 || v.length > 8)) throw new HttpError(400, "CEPs da entrega em mãos: use o começo do CEP, ex.: 13150.");
+      await saveSetting("local_ceps", list.join(","));
+    }
+    if (L.delivery_cents !== undefined) {
+      const v = Math.round(Number(L.delivery_cents) || 0);
+      if (!(v >= 0 && v <= 100000)) throw new HttpError(400, "Taxa de entrega em mãos inválida.");
+      await saveSetting("local_delivery_cents", String(v));
+    }
+    if (L.ready_days !== undefined) {
+      const v = parseInt(L.ready_days, 10);
+      if (!(v >= 0 && v <= 30)) throw new HttpError(400, "Prazo de retirada: de 0 a 30 dias.");
+      await saveSetting("pickup_days", String(v));
+    }
+  }
   if (typeof b.new_password === "string" && b.new_password) {
     if (b.new_password.length < 8) throw new HttpError(400, "A nova senha precisa ter pelo menos 8 caracteres.");
     await saveSetting("admin_password_hash", await sha256Hex("pn:" + b.new_password));
@@ -1534,12 +1606,19 @@ async function updatePartnerCommission(orderId: string): Promise<{ name: string;
 async function partnerHit(b: Body) {
   const c = partnerCode(b.code);
   if (c.length < 3) return json({});
-  if (b.count === false) {
-    const { data } = await db.from("pn_partners").select("name").eq("code", c).eq("active", true).maybeSingle();
-    return json(data ? { name: data.name } : {});
-  }
-  const { data } = await db.rpc("pn_partner_hit", { p_code: c });
-  return json(data ? { name: data } : {});
+  if (b.count !== false) await db.rpc("pn_partner_hit", { p_code: c });
+  const { data: p } = await db.from("pn_partners").select("name, pickup, address, hours").eq("code", c).eq("active", true).maybeSingle();
+  if (!p) return json({});
+  const s = cfg(await loadSettings());
+  return json({
+    name: p.name,
+    pickup: p.pickup && p.address ? { name: p.name, address: p.address, hours: p.hours || "", partner: true } : null,
+    price_cents: s.local.priceCents,
+    extra_prices: s.extraMax > 0 ? s.local.extraPrices.slice(0, s.extraMax) : [],
+    normal_price_cents: s.priceCents,
+    delivery_cents: s.local.deliveryCents,
+    ready_days: s.local.readyDays,
+  });
 }
 
 // Números de várias lojas de uma vez: testes, vendas, enfeites e comissão.
@@ -1601,13 +1680,71 @@ async function partnerView(b: Body) {
   }
   const c = cfg(await loadSettings());
   const s = (await partnerStats([p.id]))[p.id];
+  // Pedidos que o cliente retira nesta loja (só o necessário para entregar: nº, primeiro nome, pet).
+  const { data: po } = await db.from("pn_orders")
+    .select("id, order_no, code, name, pet_name, extras, production_status, paid_at, is_test")
+    .eq("partner_id", p.id).eq("payment_status", "paid").eq("delivery_method", "retirada")
+    .like("pickup_label", p.name.replace(/[%_\\]/g, "") + " — %")
+    .order("paid_at", { ascending: false }).limit(60);
+  const twoWeeks = Date.now() - 14 * 24 * 3600 * 1000;
+  const pickups = (po ?? []).filter((o) => o.production_status !== "entregue" || new Date(o.paid_at).getTime() > twoWeeks).map((o) => {
+    const parts = String(o.name || "").trim().split(/\s+/);
+    return {
+      id: o.id, order: o.order_no ? "#" + String(o.order_no).padStart(3, "0") : o.code,
+      customer: parts[0] + (parts.length > 1 ? " " + parts[parts.length - 1][0] + "." : ""),
+      pet_name: o.pet_name, ornaments: (o.extras ?? 0) + 1, status: o.production_status, paid_at: o.paid_at, is_test: o.is_test,
+    };
+  });
   return json({
-    partner: { name: p.name, code: p.code, commission_pct: Number(p.commission_pct), active: p.active, hits: p.hits, has_pix: !!p.pix_key },
+    pickups,
+    ready_days: c.local.readyDays,
+    partner: { name: p.name, code: p.code, commission_pct: Number(p.commission_pct), active: p.active, hits: p.hits, has_pix: !!p.pix_key, pickup: p.pickup && !!p.address, address: p.address, hours: p.hours },
     stats: s,
     price_cents: c.priceCents,
     extra_prices: c.extraMax > 0 ? c.extraPrices.slice(0, c.extraMax) : [],
     whatsapp: c.store.whatsapp,
   });
+}
+
+// A loja confirma que o cliente retirou o pedido.
+async function partnerDelivered(b: Body) {
+  const k = String(b.k ?? "");
+  if (!/^[0-9a-f]{32}$/.test(k) || !isUuid(b.order)) throw new HttpError(400, "Pedido inválido.");
+  const { data: p } = await db.from("pn_partners").select("id").eq("secret", k).maybeSingle();
+  if (!p) throw new HttpError(404, "Link de parceiro inválido.");
+  const { data, error } = await db.from("pn_orders").update({ production_status: "entregue" })
+    .eq("id", b.order).eq("partner_id", p.id).eq("payment_status", "paid").eq("delivery_method", "retirada").select("id");
+  if (error || !data?.length) throw new HttpError(400, "Não foi possível marcar este pedido.");
+  return await partnerView(b);
+}
+
+// deno-lint-ignore no-explicit-any
+async function partnerById(id: string): Promise<any | null> {
+  const { data } = await db.from("pn_partners").select("id, name, pickup, address, hours, active").eq("id", id).maybeSingle();
+  return data ?? null;
+}
+
+const isLocalCep = (c: ReturnType<typeof cfg>, cep: unknown) => !!cep && c.local.ceps.some((pre) => String(cep).startsWith(pre));
+
+// Onde o cliente retira: na loja parceira (se ela for ponto de retirada) ou no ponto padrão.
+// deno-lint-ignore no-explicit-any
+function pickupFor(c: ReturnType<typeof cfg>, partner: any): { name: string; address: string; hours: string; partner: boolean } | null {
+  if (partner?.pickup && partner.address) return { name: partner.name, address: partner.address, hours: partner.hours || "", partner: true };
+  return c.pickup.enabled ? { name: c.pickup.name, address: c.pickup.address, hours: "", partner: false } : null;
+}
+
+// Preço de balcão: quem veio pela loja parceira e não usa Correios (retira ou recebe em mãos na cidade).
+// Antes de informar o endereço vale o balcão (a opção padrão é retirar na loja). Depois de pago, fica o que foi cobrado.
+// deno-lint-ignore no-explicit-any
+function isLocalDeal(c: ReturnType<typeof cfg>, order: any, partner: any): boolean {
+  if (order.payment_status !== "pending") return !!order.local_deal;
+  if (!partner) return false;
+  if (order.delivery_method === "retirada" || !order.cep) return true;
+  return isLocalCep(c, order.cep);
+}
+
+function priceList(c: ReturnType<typeof cfg>, local: boolean) {
+  return local ? { price: c.local.priceCents, extras: c.local.extraPrices } : { price: c.priceCents, extras: c.extraPrices };
 }
 
 async function adminPartners() {
@@ -1619,14 +1756,19 @@ async function adminPartners() {
       id: p.id, code: p.code, name: p.name, contact_name: p.contact_name, whatsapp: p.whatsapp, pix_key: p.pix_key,
       city: p.city, commission_pct: Number(p.commission_pct), secret: p.secret, active: p.active, hits: p.hits,
       notes: p.notes, created_at: p.created_at, stats: stats[p.id],
+      pickup: p.pickup, address: p.address, hours: p.hours,
     })),
+    local: await (async () => {
+      const c = cfg(await loadSettings());
+      return { price_cents: c.local.priceCents, extra_prices: c.local.extraPrices, ceps: c.local.ceps.join(", "), delivery_cents: c.local.deliveryCents, ready_days: c.local.readyDays, normal_price_cents: c.priceCents, normal_extra_prices: c.extraPrices, extra_max: c.extraMax };
+    })(),
   });
 }
 
 async function adminSavePartner(b: Body) {
   const name = clean(b.name, 80);
   if (name.length < 2) throw new HttpError(400, "Digite o nome da loja.");
-  const pct = Number(String(b.commission_pct ?? "10").replace(",", "."));
+  const pct = Number(String(b.commission_pct ?? "15").replace(",", "."));
   if (!(pct >= 0 && pct <= 50)) throw new HttpError(400, "Comissão: de 0 a 50%.");
   let whatsapp = digits(b.whatsapp);
   if (whatsapp && whatsapp.length <= 11) whatsapp = "55" + whatsapp;
@@ -1640,6 +1782,9 @@ async function adminSavePartner(b: Body) {
     commission_pct: Math.round(pct * 100) / 100,
     active: b.active !== false,
     notes: clean(b.notes, 500) || null,
+    pickup: b.pickup !== false,
+    address: clean(b.address, 200) || null,
+    hours: clean(b.hours, 120) || null,
   };
   if (isUuid(b.id)) {
     const patch: Record<string, unknown> = { ...row };
@@ -1703,6 +1848,7 @@ Deno.serve(async (req) => {
       case "confirm": return await confirm(body);
       case "partner-hit": return await partnerHit(body);
       case "partner-view": return await partnerView(body);
+      case "partner-delivered": return await partnerDelivered(body);
       case "admin-partners": await requireAdmin(req); return await adminPartners();
       case "admin-save-partner": await requireAdmin(req); return await adminSavePartner(body);
       case "admin-partner-payout": await requireAdmin(req); return await adminPartnerPayout(body);

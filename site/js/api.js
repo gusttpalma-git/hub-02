@@ -189,11 +189,24 @@
     if (!use) return;
     // conta a visita uma vez por navegador e mostra "Indicado por <loja>" onde a página tiver espaço
     PN.partnerInfo = PN.api("partner-hit", { code: use, count: fresh }).catch(() => ({}));
+    // A página só fica "pronta" depois de saber da loja: preço de balcão e retirada nela.
+    PN.ready = Promise.all([PN.ready, PN.partnerInfo]).then(([c, info]) => {
+      if (c && info && info.name) {
+        c.partner = info;
+        c.normal_price_cents = c.price_cents;
+        c.price_cents = info.price_cents || c.price_cents;
+        if (Array.isArray(info.extra_prices)) c.extra_prices = info.extra_prices;
+        if (info.pickup) c.pickup = info.pickup;
+      }
+      return c;
+    });
     PN.partnerInfo.then((info) => {
       if (!info || !info.name) return;
       const show = () => document.querySelectorAll("[data-partner]").forEach((el) => {
         const name = el.querySelector("[data-partner-name]") || el;
         name.textContent = info.name;
+        const extra = el.querySelector("[data-partner-extra]");
+        if (extra) extra.textContent = info.pickup ? " · retire lá, sem frete" : "";
         el.hidden = false;
       });
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", show); else show();

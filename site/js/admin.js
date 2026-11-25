@@ -114,7 +114,7 @@
 
   function addressText(o) {
     if (!o.confirmed_at && !o.lead_at) return "";
-    if (o.delivery_method === "retirada") return "RETIRADA no ponto\nQuem retira: " + (o.recipient || "");
+    if (o.delivery_method === "retirada") return "RETIRADA: " + (o.pickup_label || "no ponto") + "\nQuem retira: " + (o.recipient || "");
     return [
       o.recipient,
       o.street + ", " + o.number + (o.complement ? " — " + o.complement : ""),
@@ -230,6 +230,10 @@
       el("label", { class: "field" }, el("span", {}, "Código de rastreio"), tracking),
       el("label", { class: "field" }, el("span", {}, "Anotações"), notes),
       save,
+      // retirada: avisa o cliente pelo WhatsApp que está pronto (e onde buscar)
+      o.payment_status === "paid" && o.delivery_method === "retirada" && o.whatsapp && el("a", { class: "btn ghost sm block", style: "margin-top:8px", target: "_blank", rel: "noopener",
+        href: "https://wa.me/55" + o.whatsapp + "?text=" + encodeURIComponent(`Oi, ${(o.name || "").split(" ")[0]}! Aqui é da Patinha de Natal 🎄 Seu enfeite${o.pet_name ? " do(a) " + o.pet_name : ""} (pedido ${o.order_no ? "#" + String(o.order_no).padStart(3, "0") : o.code}) está PRONTO para retirar em: ${o.pickup_label || "nosso ponto de retirada"}. É só falar o número do pedido. 🐾`) },
+        "💬 Avisar: pronto para retirar"),
       o.payment_status === "paid" && o.production_status === "aguardando" && el("p", { class: "center", style: "margin:8px 0 0" }, extra),
     );
 
@@ -240,6 +244,7 @@
         o.delivery_method === "retirada" && el("span", { class: "badge retirada" }, "🏠 Retirada"),
         (o.extras || 0) > 0 && el("span", { class: "badge extras" }, `${(o.extras || 0) + 1} enfeites`),
         o.is_test && el("span", { class: "badge teste" }, "TESTE"),
+        o.local_deal && el("span", { class: "badge parceiro" }, "🏪 balcão"),
         o.partner && el("span", { class: "badge parceiro", title: o.partner_commission_cents != null ? "Comissão: " + PN.money(o.partner_commission_cents) : "" }, "🤝 " + o.partner),
         el("span", { class: "muted small" }, "criado em " + date(o.created_at))),
       art, info, o.payment_status === "paid" ? controls : el("div", {}));
