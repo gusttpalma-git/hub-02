@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Área do parceiro — Patinha de Natal</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=16">
+  <style>
+    body { font-size: 17px; }
+    .pp { width: min(760px, 100% - 32px); margin: 18px auto 70px; display: grid; gap: 16px; }
+    .pp h1 { font: 700 clamp(1.6rem, 6vw, 2.2rem)/1.1 var(--font-title); margin: 0; color: var(--pine-deep); }
+    .pp .lead { margin: 6px 0 0; color: var(--muted); font-weight: 700; }
+    .big { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .big div { background: var(--surface); border: 2px solid var(--line); border-radius: 18px; padding: 14px; }
+    .big b { display: block; font: 800 1.6rem/1.1 var(--font-title); color: var(--pine-deep); }
+    .big span { color: var(--muted); font-weight: 800; font-size: .9rem; }
+    .big .hl { grid-column: 1 / -1; background: var(--pine); border-color: var(--pine); color: #fff; }
+    .big .hl b { color: #fff; font-size: 2.2rem; }
+    .big .hl span { color: #e3efe6; }
+    @media (min-width: 640px) { .big { grid-template-columns: repeat(4, 1fr); } .big .hl { grid-column: span 2; } }
+    .actions { display: grid; gap: 10px; }
+    @media (min-width: 640px) { .actions { grid-template-columns: 1fr 1fr; } }
+    table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+    th, td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-size: .85rem; }
+    .how li { margin-bottom: 6px; }
+    .ok { color: var(--pine); font-weight: 800; }
+    .off { color: var(--berry); font-weight: 800; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="img/favicon.svg" alt="" width="34" height="34"><span>Área do parceiro</span></a>
+    </div>
+  </header>
+
+  <main class="pp">
+    <div class="alert info" id="loading">Carregando…</div>
+    <div class="alert error" id="error" hidden role="alert"></div>
+
+    <div id="view" hidden>
+      <section>
+        <h1 id="p-name"></h1>
+        <p class="lead" id="p-lead"></p>
+      </section>
+
+      <section class="big" id="nums" aria-label="Resultados"></section>
+
+      <section class="card">
+        <h2 style="font-size:1.3rem;margin-top:0">Seu QR Code e link</h2>
+        <p class="muted" style="margin-top:0">Quem escaneia o QR do balcão (ou entra pelo link) fica marcado como cliente de vocês por 30 dias. Pode postar o link no Instagram e no WhatsApp da loja também.</p>
+        <code class="copy" id="p-link" style="display:block;background:var(--cream);border:2px dashed var(--line);border-radius:12px;padding:10px 12px;overflow-wrap:anywhere"></code>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn green" type="button" id="copy-link">📋 Copiar link</button>
+          <a class="btn ghost" id="material" target="_blank" rel="noopener">🖨️ Material para imprimir</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 style="font-size:1.3rem;margin-top:0">Vendas</h2>
+        <div id="sales"></div>
+      </section>
+
+      <section class="card">
+        <h2 style="font-size:1.3rem;margin-top:0">Pix de comissão recebidos</h2>
+        <div id="payouts"></div>
+      </section>
+
+      <details class="card how">
+        <summary><b>Como funciona</b></summary>
+        <ul>
+          <li>O cliente cria a arte do pet de graça. Vocês ganham comissão só quando ele <b>paga</b> o pedido.</li>
+          <li id="how-pct"></li>
+          <li>Se um pedido for cancelado ou reembolsado, a comissão dele sai da conta.</li>
+          <li>A comissão do mês é paga por Pix até o dia 10 do mês seguinte.</li>
+          <li>"Testes" são pessoas que vieram por vocês e começaram a criar a arte; "visitas" são quem abriu o site pelo QR ou link.</li>
+        </ul>
+      </details>
+
+      <a class="btn ghost block" id="wa" target="_blank" rel="noopener" hidden>💬 Falar com a Patinha de Natal</a>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js?v=16"></script>
+  <script>
+  (function () {
+    const $ = (s) => document.querySelector(s);
+    const k = new URLSearchParams(location.search).get("k") || "";
+    const money = (c) => PN.money(c || 0);
+    const date = (iso) => iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+    const base = location.href.split(/[?#]/)[0].replace(/[^/]*$/, "");
+
+    function el(tag, text, cls) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; }
+    function table(head, rows) {
+      const t = el("table");
+      const h = el("tr"); head.forEach((x) => h.append(el("th", x))); t.append(h);
+      rows.forEach((r) => { const tr = el("tr"); r.forEach((x) => tr.append(x instanceof Node ? x : el("td", x))); t.append(tr); });
+      return t;
+    }
+
+    PN.api("partner-view", { k }).then((d) => {
+      const p = d.partner, s = d.stats;
+      $("#loading").hidden = true;
+      $("#view").hidden = false;
+      document.title = p.name + " — Patinha de Natal";
+      $("#p-name").textContent = "Olá, " + p.name + " 🐾";
+      $("#p-lead").textContent = p.active
+        ? `Parceria ativa · ${String(p.commission_pct).replace(".", ",")}% de comissão sobre os enfeites vendidos`
+        : "Parceria pausada no momento — o link não está contando novas vendas.";
+      const pct = String(p.commission_pct).replace(".", ",");
+      $("#how-pct").textContent = `A comissão é de ${pct}% do valor dos enfeites (sem o frete). Ex.: 1 enfeite de ${money(d.price_cents)} = ${money(Math.round(d.price_cents * p.commission_pct / 100))} para vocês.`;
+
+      const box = (v, l, cls) => { const n = el("div", undefined, cls); n.append(el("b", String(v)), el("span", l)); return n; };
+      $("#nums").replaceChildren(
+        box(money(Math.max(0, s.balance_cents)), "a receber", "hl"),
+        box(money(s.month_earned_cents), "comissão este mês"),
+        box(money(s.paid_out_cents), "já recebido"),
+        box(p.hits || 0, "visitas pelo QR/link"),
+        box(s.tests, "testes iniciados"),
+        box(s.sales, "vendas pagas"),
+        box(s.ornaments, "enfeites vendidos"),
+      );
+
+      const link = base + "?p=" + p.code;
+      $("#p-link").textContent = link;
+      $("#copy-link").addEventListener("click", async (e) => {
+        try { await navigator.clipboard.writeText(link); e.target.textContent = "✓ Copiado"; } catch (_) { prompt("Copie o link:", link); }
+      });
+      $("#material").href = "material.html?c=" + encodeURIComponent(p.code) + "&n=" + encodeURIComponent(p.name);
+
+      $("#sales").replaceChildren(s.sales_list.length
+        ? table(["Pedido", "Data", "Enfeites", "Comissão"], s.sales_list.map((r) => [r.order, date(r.paid_at), String(r.ornaments),
+            el("td", r.status === "pago" ? money(r.commission_cents) : "estornado", r.status === "pago" ? "ok" : "off")]))
+        : el("p", "Ainda não teve venda. Deixe o QR bem à vista no caixa e comente com os clientes: \"Já viu seu pet como enfeite de Natal? É grátis para testar!\"", "muted"));
+      $("#payouts").replaceChildren(s.payouts.length
+        ? table(["Data", "Valor", "Obs."], s.payouts.map((r) => [date(r.paid_at), money(r.amount_cents), r.note || ""]))
+        : el("p", "Nenhum Pix ainda.", "muted"));
+
+      if (d.whatsapp) {
+        $("#wa").href = "https://wa.me/" + d.whatsapp + "?text=" + encodeURIComponent("Oi! Sou da " + p.name + " (parceiro " + p.code + ").");
+        $("#wa").hidden = false;
+      }
+    }).catch((err) => {
+      $("#loading").hidden = true;
+      $("#error").textContent = err.message;
+      $("#error").hidden = false;
+    });
+  })();
+  </script>
+</body>
+</html>

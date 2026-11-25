@@ -166,6 +166,40 @@
     return c;
   });
 
+  // Loja parceira (pet shop): o QR do balcão abre o site com ?p=CODIGO. Guarda o código por 30 dias
+  // (vale a primeira loja) e manda junto quando o teste grátis começa.
+  const PARTNER_KEY = "pn_partner";
+  const PARTNER_DAYS = 30;
+  PN.partner = function () {
+    try {
+      const v = JSON.parse(localStorage.getItem(PARTNER_KEY) || "null");
+      if (v && v.code && Date.now() - v.at < PARTNER_DAYS * 864e5) return v.code;
+    } catch (_) { /* modo privado */ }
+    return null;
+  };
+  (function capturePartner() {
+    const raw = new URLSearchParams(location.search).get("p");
+    const code = raw ? raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) : "";
+    const current = PN.partner();
+    let fresh = false;
+    if (code.length >= 3 && !current) {
+      try { localStorage.setItem(PARTNER_KEY, JSON.stringify({ code, at: Date.now() })); fresh = true; } catch (_) { /* modo privado */ }
+    }
+    const use = current || (code.length >= 3 ? code : null);
+    if (!use) return;
+    // conta a visita uma vez por navegador e mostra "Indicado por <loja>" onde a página tiver espaço
+    PN.partnerInfo = PN.api("partner-hit", { code: use, count: fresh }).catch(() => ({}));
+    PN.partnerInfo.then((info) => {
+      if (!info || !info.name) return;
+      const show = () => document.querySelectorAll("[data-partner]").forEach((el) => {
+        const name = el.querySelector("[data-partner-name]") || el;
+        name.textContent = info.name;
+        el.hidden = false;
+      });
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", show); else show();
+    });
+  })();
+
   window.PN = PN;
   document.addEventListener("DOMContentLoaded", PN.applyBrand);
 })();

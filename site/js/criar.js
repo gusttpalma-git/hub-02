@@ -948,7 +948,7 @@
     try {
       if (!state.token) {
         // Primeiro teste: o pedido nasce agora, já com nome, WhatsApp e e-mail.
-        const t = await PN.api("trial-start", { site_url: location.href.split(/[?#]/)[0], ...contact });
+        const t = await PN.api("trial-start", { site_url: location.href.split(/[?#]/)[0], partner: PN.partner ? PN.partner() : null, ...contact });
         state.token = t.token;
         PN.setToken(t.token);
         try { localStorage.setItem(speciesKey(0), state.species); } catch (_) { /* modo privado */ }

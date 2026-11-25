@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=16">
   <style>
     body { font-size: 17px; }
     .admin { width: min(1180px, 100% - 28px); margin: 0 auto 80px; }
@@ -79,6 +79,29 @@
     .settings .card[hidden] { display: none; }
     .save-bar { grid-column: 1 / -1; position: sticky; bottom: 0; z-index: 5; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg, #fbf6ee) 30%); }
     .save-bar .btn { width: 100%; max-width: 360px; }
+    .p-grid { display: grid; gap: 0 12px; grid-template-columns: 1fr; }
+    @media (min-width: 700px) { .p-grid { grid-template-columns: 1fr 1fr; } }
+    .p-grid .field input { min-height: 48px; font-size: 1rem; border-width: 2px; border-radius: 12px; }
+    .p-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .p-new { margin-bottom: 16px; }
+    .partner { background: var(--paper); border: 2px solid var(--line); border-radius: 20px; padding: 16px 18px; margin-bottom: 14px; }
+    .partner.off { opacity: .6; }
+    .partner header { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; margin-bottom: 10px; }
+    .partner header strong { font: 800 1.2rem var(--font-title); }
+    .partner .code { font: 800 .9rem ui-monospace, monospace; background: var(--cream); border: 1px dashed var(--line); border-radius: 8px; padding: 2px 8px; }
+    .partner .nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 6px 0 12px; }
+    .partner .nums div { background: var(--cream); border-radius: 12px; padding: 8px 10px; }
+    .partner .nums b { display: block; font: 800 1.2rem var(--font-title); color: var(--green-dark); }
+    .partner .nums span { font-size: .8rem; color: var(--muted); font-weight: 700; }
+    .partner .nums .due b { color: var(--red); }
+    .partner .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    .partner .btns .btn { min-height: 42px; padding: 6px 14px; font-size: .92rem; }
+    .partner details { margin-top: 10px; }
+    .partner table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 6px; }
+    .partner td, .partner th { text-align: left; padding: 5px 6px; border-top: 1px solid var(--line); }
+    .partner .meta { color: var(--muted); font-size: .9rem; font-weight: 700; margin: 0 0 8px; overflow-wrap: anywhere; }
+    .p-help ol { padding-left: 20px; line-height: 1.55; }
+    .badge.parceiro { background: #efe4fb; color: #4b2380; }
     .test-warn { margin: 0 0 14px; padding: 12px 16px; border-radius: 14px; background: #fde8c8; color: #6a3d06; }
   </style>
 </head>
@@ -103,6 +126,7 @@
   <main class="admin" id="panel" hidden>
     <div class="tabs">
       <button class="tab on" data-tab="orders" type="button">📦 Pedidos</button>
+      <button class="tab" data-tab="partners" type="button">🤝 Parceiros</button>
       <button class="tab" data-tab="settings" type="button">⚙️ Configurações</button>
       <button class="tab" id="refresh" type="button" style="margin-left:auto">↻ Atualizar</button>
     </div>
@@ -112,6 +136,44 @@
       <div class="stats" id="stats"></div>
       <div class="tabs" id="filters"></div>
       <div id="orders"></div>
+    </section>
+
+    <section id="tab-partners" style="padding:0" hidden>
+      <div class="stats" id="p-stats"></div>
+      <div class="card p-new">
+        <h3 id="p-form-title">➕ Cadastrar loja parceira</h3>
+        <p class="muted" style="margin-top:0">Pet shop, clínica, banho e tosa… A loja deixa o QR no balcão e ganha uma % de cada venda paga que vier dele (sem contar o frete).</p>
+        <form id="p-form" autocomplete="off">
+          <input type="hidden" name="id">
+          <div class="p-grid">
+            <label class="field"><span>Nome da loja *</span><input name="name" required maxlength="80" placeholder="Ex.: Pet Shop Amigo Fiel"></label>
+            <label class="field"><span>Código do link <small>(opcional)</small></span><input name="code" maxlength="12" placeholder="automático" style="text-transform:uppercase"></label>
+            <label class="field"><span>Responsável</span><input name="contact_name" maxlength="80"></label>
+            <label class="field"><span>WhatsApp da loja</span><input name="whatsapp" inputmode="tel" maxlength="20" placeholder="(19) 99999-9999"></label>
+            <label class="field"><span>Chave Pix (para a comissão)</span><input name="pix_key" maxlength="120"></label>
+            <label class="field"><span>Cidade</span><input name="city" maxlength="80"></label>
+            <label class="field"><span>Comissão (%)</span><input name="commission_pct" inputmode="decimal" value="10" maxlength="5"></label>
+            <label class="field"><span>Anotações</span><input name="notes" maxlength="500" placeholder="Ex.: falei com a Ana, display no caixa"></label>
+          </div>
+          <label class="switch" id="p-active-wrap" hidden><input type="checkbox" name="active" checked> Loja ativa (o link conta para ela)</label>
+          <div class="alert error" id="p-error" hidden role="alert"></div>
+          <div class="p-actions">
+            <button class="btn green" type="submit" id="p-save">Cadastrar loja</button>
+            <button class="btn ghost" type="button" id="p-cancel" hidden>Cancelar edição</button>
+          </div>
+        </form>
+      </div>
+      <div id="p-list"></div>
+      <details class="card p-help">
+        <summary><b>💡 Como funciona e como pagar a comissão</b></summary>
+        <ol>
+          <li>Cadastre a loja → toque em <b>🖨️ Material</b> e imprima o display do balcão (A5 ou A6) e os cartõezinhos.</li>
+          <li>Quem escaneia o QR fica marcado como cliente da loja por 30 dias, mesmo que compre depois.</li>
+          <li>A comissão só entra quando o pedido é <b>pago</b>. Se você reembolsar, ela sai da conta sozinha.</li>
+          <li>Mande o <b>link da página da loja</b> para o dono: ele acompanha testes, vendas e quanto tem a receber.</li>
+          <li>Todo dia 5, pague por Pix o saldo do mês anterior e toque em <b>✅ Registrar Pix</b>. Guarde o comprovante do Pix: ele é o seu recibo. Na sua planilha de despesas do MEI, lance como "comissão de venda".</li>
+        </ol>
+      </details>
     </section>
 
     <section id="tab-settings" style="padding:0" hidden>
@@ -297,10 +359,11 @@
   </main>
 
   <script src="js/config.js"></script>
-  <script src="js/api.js?v=15"></script>
-  <script src="js/vendor/imagetracer.js?v=15"></script>
-  <script src="js/vendor/earcut.min.js?v=15"></script>
-  <script src="js/ornament3d.js?v=15"></script>
-  <script src="js/admin.js?v=15"></script>
+  <script src="js/api.js?v=16"></script>
+  <script src="js/vendor/imagetracer.js?v=16"></script>
+  <script src="js/vendor/earcut.min.js?v=16"></script>
+  <script src="js/ornament3d.js?v=16"></script>
+  <script src="js/admin.js?v=16"></script>
+  <script src="js/admin-parceiros.js?v=16"></script>
 </body>
 </html>

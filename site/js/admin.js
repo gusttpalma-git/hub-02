@@ -75,9 +75,11 @@
 
   document.querySelectorAll("[data-tab]").forEach((tab) => tab.addEventListener("click", () => {
     document.querySelectorAll("[data-tab]").forEach((t) => t.classList.toggle("on", t === tab));
-    $("#tab-orders").hidden = tab.dataset.tab !== "orders";
-    $("#tab-settings").hidden = tab.dataset.tab !== "settings";
+    document.querySelectorAll("#panel > section[id^=tab-]").forEach((sec) => { sec.hidden = sec.id !== "tab-" + tab.dataset.tab; });
+    document.dispatchEvent(new CustomEvent("pn-admin-tab", { detail: tab.dataset.tab }));
   }));
+  // a aba "Parceiros" (admin-parceiros.js) usa a mesma senha
+  window.PNAdmin = { call: (action, data) => call(action, data) };
   $("#refresh").addEventListener("click", loadOrders);
 
   // ───────── pedidos ─────────
@@ -238,6 +240,7 @@
         o.delivery_method === "retirada" && el("span", { class: "badge retirada" }, "🏠 Retirada"),
         (o.extras || 0) > 0 && el("span", { class: "badge extras" }, `${(o.extras || 0) + 1} enfeites`),
         o.is_test && el("span", { class: "badge teste" }, "TESTE"),
+        o.partner && el("span", { class: "badge parceiro", title: o.partner_commission_cents != null ? "Comissão: " + PN.money(o.partner_commission_cents) : "" }, "🤝 " + o.partner),
         el("span", { class: "muted small" }, "criado em " + date(o.created_at))),
       art, info, o.payment_status === "paid" ? controls : el("div", {}));
   }

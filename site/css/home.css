@@ -87,3 +87,8 @@
   .h-slide { transition: none; }
   .h-slide.on .h-pet { animation: none; }
 }
+
+/* "Indicado por <loja parceira>" (quem chegou pelo QR do pet shop) */
+.h-partner { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 6px 14px; border-radius: 999px; background: var(--green-soft, #e4f2e7); color: var(--green-dark, #1d5a32); font: 800 .9rem var(--font-body); }
+.h-partner[hidden] { display: none; }
+.h-partner b { font-weight: 900; }

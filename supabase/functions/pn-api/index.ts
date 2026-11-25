@@ -285,12 +285,14 @@ async function onPaid(order: any, c: ReturnType<typeof cfg>) {
   }
   const admin = o.site_url ? o.site_url + "admin.html" : undefined;
   const value = (o.amount_cents / 100).toFixed(2).replace(".", ",");
+  const via = await updatePartnerCommission(o.id);
+  const viaText = via ? ` · 🤝 ${via.name} (comissão R$ ${(via.cents / 100).toFixed(2).replace(".", ",")})` : "";
   if (o.confirmed_at) {
     await notify("confirmed", o, c);
-    await pushOwner(c, `🎄 Pedido ${orderNo(o)} pago e pronto para produzir`, `${o.name} · R$ ${value}${o.extras ? ` · ${o.extras + 1} enfeites` : ""} · ${o.delivery_method === "retirada" ? "retirada" : o.city + "/" + o.state}`, admin);
+    await pushOwner(c, `🎄 Pedido ${orderNo(o)} pago e pronto para produzir`, `${o.name} · R$ ${value}${o.extras ? ` · ${o.extras + 1} enfeites` : ""} · ${o.delivery_method === "retirada" ? "retirada" : o.city + "/" + o.state}${viaText}`, admin);
   } else {
     await notify("paid", o, c);
-    await pushOwner(c, `💰 Novo pedido pago ${orderNo(o)}`, `${o.name} · R$ ${value} — falta o cliente terminar a arte (${o.code})`, admin);
+    await pushOwner(c, `💰 Novo pedido pago ${orderNo(o)}`, `${o.name} · R$ ${value} — falta o cliente terminar a arte (${o.code})${viaText}`, admin);
   }
 }
 
@@ -379,6 +381,8 @@ async function applyUpsellPayment(payment: any, upsellId: string) {
   const c = cfg(await loadSettings());
   const { data: ok } = await db.rpc("pn_apply_upsell", { p_upsell: upsellId, p_payment: String(payment.id), p_credits: c.extraCredits });
   if (ok) {
+    const { data: upOrder } = await db.from("pn_upsells").select("order_id").eq("id", upsellId).maybeSingle();
+    if (upOrder?.order_id) await updatePartnerCommission(upOrder.order_id);
     const { data: o } = await db.from("pn_upsells").select("pn_orders(code, order_no, is_test, name, site_url)").eq("id", upsellId).maybeSingle();
     // deno-lint-ignore no-explicit-any
     const ord: any = (o as any)?.pn_orders;
@@ -737,8 +741,10 @@ async function checkout(b: Body) {
   const totalCents = c.priceCents + ex.cents + shipping.cents;
 
   const token = randomHex(24);
+  const partnerId = await partnerIdOf(b.partner);
   const { data: order, error } = await db.from("pn_orders").insert({
     code: orderCode(),
+    ...(partnerId ? { partner_id: partnerId } : {}),
     token,
     name,
     email,
@@ -939,10 +945,12 @@ async function trialStart(req: Request, b: Body) {
     }
   }
   const token = randomHex(24);
+  const partnerId = await partnerIdOf(b.partner);
   const { error } = await db.from("pn_orders").insert({
     code: orderCode(),
     token,
     trial: true,
+    ...(partnerId ? { partner_id: partnerId } : {}),
     client_ip: ip,
     amount_cents: 0,
     site_url: base,
@@ -1316,6 +1324,8 @@ async function adminOrders(b: Body) {
     ? await db.from("pn_generations").select("id, order_id, status, species, item, source_path, result_path, created_at").in("order_id", ids).order("created_at")
     : { data: [] };
   const urls = await signedUrls((gens ?? []).flatMap((g) => [g.source_path, g.result_path]));
+  const { data: partners } = await db.from("pn_partners").select("id, name");
+  const partnerName = Object.fromEntries((partners ?? []).map((p) => [p.id, p.name]));
   const { data: allItems } = ids.length
     ? await db.from("pn_order_items").select("order_id, position, kind, chosen_generation, pet_name").in("order_id", ids).order("position")
     : { data: [] };
@@ -1333,6 +1343,8 @@ async function adminOrders(b: Body) {
       customer_notes: o.customer_notes,
       chosen_generation: o.chosen_generation,
       extras: o.extras, extras_cents: o.extras_cents,
+      partner: o.partner_id ? partnerName[o.partner_id] ?? "loja parceira" : null,
+      partner_commission_cents: o.partner_commission_cents ?? null,
       items: (allItems ?? []).filter((it) => it.order_id === o.id).map((it) => ({ position: it.position, kind: it.kind, chosen_generation: it.chosen_generation, pet_name: it.pet_name })),
       generations: (gens ?? []).filter((g) => g.order_id === o.id).map((g) => ({
         id: g.id, status: g.status, species: g.species, item: g.item ?? 0,
@@ -1489,6 +1501,179 @@ async function adminSaveSettings(b: Body) {
   return json({ settings: settingsView(await loadSettings()) });
 }
 
+// ───────────────────────── parceiros (pet shops) ─────────────────────────
+//
+// Cada loja tem um código curto (link/QR: site/?p=CODIGO) e uma chave secreta para a página
+// dela (parceiro.html?k=CHAVE). A comissão é uma % sobre os enfeites (sem o frete), gravada
+// quando o pagamento entra, e só conta enquanto o pedido estiver pago.
+
+const partnerCode = (v: unknown) => String(v ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+
+// Id da loja ativa a partir do código que o site guardou (ou null).
+async function partnerIdOf(code: unknown): Promise<string | null> {
+  const c = partnerCode(code);
+  if (c.length < 3) return null;
+  const { data } = await db.from("pn_partners").select("id").eq("code", c).eq("active", true).maybeSingle();
+  return data?.id ?? null;
+}
+
+// Recalcula a comissão de um pedido pago (no pagamento e quando entra um enfeite a mais).
+async function updatePartnerCommission(orderId: string): Promise<{ name: string; cents: number } | null> {
+  const { data: o } = await db.from("pn_orders")
+    .select("partner_id, payment_status, is_test, amount_cents, shipping_cents").eq("id", orderId).maybeSingle();
+  if (!o?.partner_id || o.payment_status !== "paid") return null;
+  const { data: p } = await db.from("pn_partners").select("name, commission_pct").eq("id", o.partner_id).maybeSingle();
+  if (!p) return null;
+  const base = Math.max(0, (o.amount_cents ?? 0) - (o.shipping_cents ?? 0));
+  const cents = o.is_test ? 0 : Math.round(base * Number(p.commission_pct) / 100);
+  await db.from("pn_orders").update({ partner_commission_cents: cents }).eq("id", orderId);
+  return { name: p.name, cents };
+}
+
+// Visita vinda do QR: conta uma vez por navegador e devolve o nome da loja (para o "Indicado por").
+async function partnerHit(b: Body) {
+  const c = partnerCode(b.code);
+  if (c.length < 3) return json({});
+  if (b.count === false) {
+    const { data } = await db.from("pn_partners").select("name").eq("code", c).eq("active", true).maybeSingle();
+    return json(data ? { name: data.name } : {});
+  }
+  const { data } = await db.rpc("pn_partner_hit", { p_code: c });
+  return json(data ? { name: data } : {});
+}
+
+// Números de várias lojas de uma vez: testes, vendas, enfeites e comissão.
+// deno-lint-ignore no-explicit-any
+async function partnerStats(ids: string[]): Promise<Record<string, any>> {
+  // deno-lint-ignore no-explicit-any
+  const out: Record<string, any> = {};
+  for (const id of ids) out[id] = { tests: 0, leads: 0, sales: 0, ornaments: 0, revenue_cents: 0, earned_cents: 0, paid_out_cents: 0, balance_cents: 0, month_earned_cents: 0, sales_list: [], payouts: [] };
+  if (!ids.length) return out;
+  const { data: orders } = await db.from("pn_orders")
+    .select("partner_id, order_no, code, created_at, paid_at, payment_status, is_test, extras, amount_cents, shipping_cents, partner_commission_cents, lead_at")
+    .in("partner_id", ids).order("created_at", { ascending: false }).limit(5000);
+  const { data: payouts } = await db.from("pn_partner_payouts").select("partner_id, amount_cents, note, paid_at").in("partner_id", ids).order("paid_at", { ascending: false });
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(3, 0, 0, 0); // meia-noite de Brasília
+  for (const o of orders ?? []) {
+    const s = out[o.partner_id];
+    s.tests++;
+    if (o.lead_at) s.leads++;
+    if (o.payment_status === "pending" || o.is_test) continue;
+    const paid = o.payment_status === "paid";
+    const com = o.partner_commission_cents ?? 0;
+    if (paid) {
+      s.sales++;
+      s.ornaments += (o.extras ?? 0) + 1;
+      s.revenue_cents += Math.max(0, o.amount_cents - (o.shipping_cents ?? 0));
+      s.earned_cents += com;
+      if (o.paid_at && new Date(o.paid_at) >= monthStart) s.month_earned_cents += com;
+    }
+    if (s.sales_list.length < 100) {
+      s.sales_list.push({
+        order: o.order_no ? "#" + String(o.order_no).padStart(3, "0") : o.code,
+        paid_at: o.paid_at, ornaments: (o.extras ?? 0) + 1,
+        commission_cents: com, status: paid ? "pago" : "reembolsado",
+      });
+    }
+  }
+  for (const p of payouts ?? []) {
+    const s = out[p.partner_id];
+    s.paid_out_cents += p.amount_cents;
+    s.payouts.push({ amount_cents: p.amount_cents, note: p.note, paid_at: p.paid_at });
+  }
+  for (const id of ids) out[id].balance_cents = out[id].earned_cents - out[id].paid_out_cents;
+  return out;
+}
+
+// Página do parceiro (sem login: a chave secreta do link é a senha).
+async function partnerView(b: Body) {
+  const k = String(b.k ?? "");
+  if (!/^[0-9a-f]{32}$/.test(k)) {
+    await sleep(500);
+    throw new HttpError(404, "Link de parceiro inválido. Peça um novo para a Patinha de Natal.");
+  }
+  const { data: p } = await db.from("pn_partners").select("*").eq("secret", k).maybeSingle();
+  if (!p) {
+    await sleep(500);
+    throw new HttpError(404, "Link de parceiro inválido. Peça um novo para a Patinha de Natal.");
+  }
+  const c = cfg(await loadSettings());
+  const s = (await partnerStats([p.id]))[p.id];
+  return json({
+    partner: { name: p.name, code: p.code, commission_pct: Number(p.commission_pct), active: p.active, hits: p.hits, has_pix: !!p.pix_key },
+    stats: s,
+    price_cents: c.priceCents,
+    extra_prices: c.extraMax > 0 ? c.extraPrices.slice(0, c.extraMax) : [],
+    whatsapp: c.store.whatsapp,
+  });
+}
+
+async function adminPartners() {
+  const { data: list, error } = await db.from("pn_partners").select("*").order("created_at", { ascending: false });
+  if (error) throw new HttpError(500, "Erro ao carregar parceiros.");
+  const stats = await partnerStats((list ?? []).map((p) => p.id));
+  return json({
+    partners: (list ?? []).map((p) => ({
+      id: p.id, code: p.code, name: p.name, contact_name: p.contact_name, whatsapp: p.whatsapp, pix_key: p.pix_key,
+      city: p.city, commission_pct: Number(p.commission_pct), secret: p.secret, active: p.active, hits: p.hits,
+      notes: p.notes, created_at: p.created_at, stats: stats[p.id],
+    })),
+  });
+}
+
+async function adminSavePartner(b: Body) {
+  const name = clean(b.name, 80);
+  if (name.length < 2) throw new HttpError(400, "Digite o nome da loja.");
+  const pct = Number(String(b.commission_pct ?? "10").replace(",", "."));
+  if (!(pct >= 0 && pct <= 50)) throw new HttpError(400, "Comissão: de 0 a 50%.");
+  let whatsapp = digits(b.whatsapp);
+  if (whatsapp && whatsapp.length <= 11) whatsapp = "55" + whatsapp;
+  if (whatsapp && (whatsapp.length < 12 || whatsapp.length > 13)) throw new HttpError(400, "WhatsApp da loja inválido. Use DDD + número.");
+  const row = {
+    name,
+    contact_name: clean(b.contact_name, 80) || null,
+    whatsapp: whatsapp || null,
+    pix_key: clean(b.pix_key, 120) || null,
+    city: clean(b.city, 80) || null,
+    commission_pct: Math.round(pct * 100) / 100,
+    active: b.active !== false,
+    notes: clean(b.notes, 500) || null,
+  };
+  if (isUuid(b.id)) {
+    const patch: Record<string, unknown> = { ...row };
+    if (b.new_secret === true) patch.secret = randomHex(16);
+    const { error } = await db.from("pn_partners").update(patch).eq("id", b.id);
+    if (error) throw new HttpError(500, "Não foi possível salvar a loja.");
+    return await adminPartners();
+  }
+  // Código curto e fácil de ler: do nome da loja (sem "pet shop") ou o que o dono digitou.
+  const generic = /\b(PET\s*SHOP|PETSHOP|PET|SHOP|CLINICA|CLÍNICA|VETERINARIA|VETERINÁRIA|AGROPECUARIA|AGROPECUÁRIA|BANHO|TOSA|E|DE|DO|DA|DOS|DAS)\b/g;
+  const wanted = partnerCode(b.code);
+  if (b.code && wanted.length < 3) throw new HttpError(400, "O código precisa ter de 3 a 12 letras ou números.");
+  const fromName = partnerCode(name.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(generic, " ")).slice(0, 8);
+  const base = wanted || (fromName.length >= 3 ? fromName : partnerCode(name.normalize("NFD").replace(/[̀-ͯ]/g, "")).slice(0, 8)) || "LOJA";
+  for (let i = 0; i < 20; i++) {
+    const code = i === 0 && base.length >= 3 ? base : base.slice(0, 8) + String(Math.floor(Math.random() * 90) + 10);
+    const { error } = await db.from("pn_partners").insert({ ...row, code, secret: randomHex(16) });
+    if (!error) return await adminPartners();
+    if (error.code !== "23505") throw new HttpError(500, "Não foi possível cadastrar a loja.");
+    if (wanted) throw new HttpError(409, "Esse código já é de outra loja. Escolha outro.");
+  }
+  throw new HttpError(500, "Não foi possível criar um código para a loja. Digite um código.");
+}
+
+// Registra um Pix de comissão pago à loja (valor negativo corrige um lançamento errado).
+async function adminPartnerPayout(b: Body) {
+  if (!isUuid(b.partner_id)) throw new HttpError(400, "Loja inválida.");
+  const cents = Math.round(Number(b.amount_cents) || 0);
+  if (!cents || Math.abs(cents) > 10000000) throw new HttpError(400, "Valor inválido.");
+  const { error } = await db.from("pn_partner_payouts").insert({ partner_id: b.partner_id, amount_cents: cents, note: clean(b.note, 200) || null });
+  if (error) throw new HttpError(500, "Não foi possível registrar o pagamento.");
+  return await adminPartners();
+}
+
 // ───────────────────────── roteador ─────────────────────────
 
 Deno.serve(async (req) => {
@@ -1515,6 +1700,11 @@ Deno.serve(async (req) => {
       case "item-kind": return await itemKind(body);
       case "add-extras": return await addExtras(body);
       case "confirm": return await confirm(body);
+      case "partner-hit": return await partnerHit(body);
+      case "partner-view": return await partnerView(body);
+      case "admin-partners": await requireAdmin(req); return await adminPartners();
+      case "admin-save-partner": await requireAdmin(req); return await adminSavePartner(body);
+      case "admin-partner-payout": await requireAdmin(req); return await adminPartnerPayout(body);
       case "admin-login": return json({ settings: settingsView(await requireAdmin(req)) });
       case "admin-orders": await requireAdmin(req); return await adminOrders(body);
       case "admin-update-order": await requireAdmin(req); return await adminUpdateOrder(body);
