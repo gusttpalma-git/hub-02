@@ -1028,7 +1028,8 @@ async function lead(b: Body) {
       if (!a.city) throw new HttpError(400, "Digite a cidade.");
       if (!/^[A-Z]{2}$/.test(a.state ?? "")) throw new HttpError(400, "Escolha o estado.");
       try {
-        checkRegion(c.shipping, a.cep as string, order.payment_status !== "paid");
+        // entrega em mãos na cidade (cliente da loja parceira) não depende da data-limite dos Correios
+        checkRegion(c.shipping, a.cep as string, order.payment_status !== "paid" && !(order.partner_id && isLocalCep(c, a.cep)));
       } catch (err) {
         throw new HttpError(400, (err as Error).message);
       }
@@ -1064,7 +1065,7 @@ async function pay(b: Body) {
   let shipping: { cents: number; cost: number | null; label: string } = { cents: 0, cost: null, label: point ? "Retirada: " + point.name : "Frete grátis" };
   if (!pickup) {
     try {
-      checkRegion(c.shipping, order.cep);
+      checkRegion(c.shipping, order.cep, !(partner && isLocalCep(c, order.cep)));
     } catch (err) {
       throw new HttpError(400, (err as Error).message);
     }
@@ -1700,8 +1701,8 @@ async function partnerView(b: Body) {
     ready_days: c.local.readyDays,
     partner: { name: p.name, code: p.code, commission_pct: Number(p.commission_pct), active: p.active, hits: p.hits, has_pix: !!p.pix_key, pickup: p.pickup && !!p.address, address: p.address, hours: p.hours },
     stats: s,
-    price_cents: c.priceCents,
-    extra_prices: c.extraMax > 0 ? c.extraPrices.slice(0, c.extraMax) : [],
+    price_cents: c.local.priceCents,
+    extra_prices: c.extraMax > 0 ? c.local.extraPrices.slice(0, c.extraMax) : [],
     whatsapp: c.store.whatsapp,
   });
 }
